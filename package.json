@@ -1,0 +1,57 @@
+{
+  "name": "@render/pi-render",
+  "version": "0.0.0",
+  "description": "Render integration for the Pi coding agent — skills, MCP access, blueprint validation, commands, and the @render subagent.",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "src",
+    "skills",
+    "prompts",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "sync-skills": "bash scripts/sync-skills.sh"
+  },
+  "dependencies": {
+    "pi-mcp-adapter": "^2.15.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "@earendil-works/pi-agent-core": "0.79.10",
+    "@earendil-works/pi-ai": "0.79.10",
+    "@earendil-works/pi-coding-agent": "0.79.10",
+    "@earendil-works/pi-tui": "0.79.10",
+    "@marcfargas/pi-test-harness": "^0.6.1",
+    "@types/node": "^24.0.0",
+    "typebox": "^1.3.8",
+    "typescript": "^7.0.2",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.10"
+  }
+}
