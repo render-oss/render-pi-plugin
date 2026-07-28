@@ -20,7 +20,7 @@ How we build the Phase 1 package described in [`seed.md`](./seed.md): parity wit
 | --- | --- | --- |
 | Language | TypeScript (ESM) | Loaded by Pi via jiti; no compile output |
 | Test runner | **Vitest** (`globals: true`) | Ecosystem standard for pi extensions |
-| Extension test harness | **`@marcfargas/pi-test-harness`** | In-process real Pi runtime + playbook-mocked LLM (`when/calls/says`), `mockTools`, `mockUI`, `createMockPi()` |
+| Extension testing | **Typed fake `ExtensionAPI`** (`tests/support/fake-pi.ts`) + pure unit tests | Drives the extension against pi's *public* API; captures registered tools/commands/handlers to assert + invoke with synthetic events. No third-party runtime. |
 | Path resolution in tests | `vite-tsconfig-paths` | Resolves pi core type paths during transpile |
 | Lint/format | **Biome** | Single fast tool; matches pi-extensions convention |
 | Typecheck | `tsc --noEmit` | Correctness gate only |
@@ -29,9 +29,9 @@ How we build the Phase 1 package described in [`seed.md`](./seed.md): parity wit
 **Dependencies split** (critical — Pi installs with `--omit=dev`):
 - `dependencies`: `pi-mcp-adapter` (runtime glue we actually import).
 - `peerDependencies` (`"*"`): `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`, `typebox` — provided by Pi at runtime.
-- `devDependencies`: the same pi core packages (so tests/typecheck resolve) **pinned to `0.79.10`**, `@earendil-works/pi-agent-core` (harness peer), `@marcfargas/pi-test-harness`, `vitest`, `vite-tsconfig-paths`, `@biomejs/biome`, `typescript`, `@types/node`.
+- `devDependencies`: pi core packages **at latest (`^0.82.1`)** so typecheck runs against current types (`@earendil-works/pi-coding-agent`, `-ai`, `-tui`), `vitest`, `vite-tsconfig-paths`, `@biomejs/biome`, `typescript`, `@types/node`.
 
-> **Known constraint — harness ↔ pi-core version pin (found in M0).** Every published pi test-harness (`@marcfargas`, `@gaodes`) imports `getModel` from `@earendil-works/pi-ai`, which was **removed in pi-ai `0.80.0`** (now `createModels`). So the *test runtime* is pinned to the last compatible pi-core, **`0.79.10`**. This is dev-only: our `peerDependencies` stay `*`, so the package still runs against whatever current pi the user has installed. Extension code must therefore stick to API surface present in **both** 0.79.x and current pi (the stable `registerTool`/`on`/`registerCommand`/`ctx.ui` surface — safe). Revisit when a harness targeting pi ≥0.80 ships.
+> **Why a fake API instead of a runtime harness (decided in M0).** Every published pi test-harness (`@marcfargas`, `@gaodes`) is hard-coupled to **pre-0.80 internals** — it imports the moved `getModel` *and* monkeypatches private fields (`session._modelRegistry`, `session.agent.streamFn/getApiKey`) to bypass auth; on pi `0.82` the auth preflight fires ("No API key found"). Rather than pin to old pi or fork the harness, we test the extension against pi's **public `ExtensionAPI`** with a small typed fake (`tests/support/fake-pi.ts`) plus pure unit tests. This tracks **latest pi** (typecheck catches API drift), has no fragile deps, and is fast. Trade-off: we don't simulate the LLM's tool-calling — which we don't need, since we test *our* glue, not model behavior. Revisit an end-to-end smoke layer (e.g. a local OpenAI-compatible endpoint via `registerProvider`/`models.json`) only if a real-runtime need appears.
 
 ---
 
@@ -61,8 +61,9 @@ pi-render/
 ├── scripts/
 │   └── sync-skills.sh        # clone/pull render-oss/skills @ pinned SHA → skills/
 ├── tests/
-│   ├── unit/                 # pure-function tests (no harness)
-│   ├── integration/          # pi-test-harness session tests
+│   ├── support/              # fake-pi.ts (typed ExtensionAPI double)
+│   ├── unit/                 # pure-function tests
+│   ├── extension/            # extension-wiring tests via the fake API
 │   └── package/              # manifest + skills presence validation
 └── PLAN.md / seed.md / README.md
 ```
@@ -94,11 +95,11 @@ pi-render/
 
 | Layer | How | Example |
 | --- | --- | --- |
-| Pure logic | Vitest, no harness | blueprint filename match, output formatting, MCP config builder, API-key/CLI detection |
-| Extension behavior (tools, hooks, commands) | pi-test-harness in-process session | `render_validate_blueprint` returns formatted result; auto-validate fires on `render.yaml` write; commands are registered/expand |
+| Pure logic | Vitest, direct | blueprint filename match, output formatting, MCP config builder, API-key/CLI detection |
+| Extension behavior (tools, hooks, commands) | fake `ExtensionAPI`: call the factory, assert captured registrations, then invoke captured `tool.execute` / event handlers with synthetic events | `render_validate_blueprint` returns formatted result; the `tool_result` handler enriches on a synthetic `render.yaml` write event; commands are registered |
 | `render` CLI | **injected runner** in unit tests; `createMockPi()`-style PATH shim / stub runner in integration | success, failure, and `ENOENT` (CLI missing → install hint) |
 | Render MCP / `pi-mcp-adapter` | boundary: assert the **config we hand it**, never the network | `buildRenderMcpConfig` points at `https://mcp.render.com/mcp`, `lifecycle: "eager"`, auth from env |
-| LLM | harness playbook (`when/calls/says`) | deterministic; never a live model |
+| LLM | not in the loop | we assert registration + handler logic directly; no model, no provider keys |
 | Skills content | package test asserts presence + valid frontmatter | not re-testing Render's skill prose |
 
 We do **not** write tests that hit `mcp.render.com`, the real `render` CLI, or a real model. Live wiring is verified once, manually, in the M5/M7 smoke check.
@@ -109,13 +110,13 @@ We do **not** write tests that hit `mcp.render.com`, the real `render` CLI, or a
 
 Order follows `seed.md`'s build order. Each milestone: **write the red tests first**, implement the minimum to pass, refactor, then `npm run verify`.
 
-### M0 — Scaffold + green harness
+### M0 — Scaffold + green light
 **Red tests first:**
-- `integration/loads.test.ts`: `createTestSession({ extensions: ["./src/index.ts"] })` loads, and `t.run(when("hi", [says("hi")]))` completes without error.
+- `extension/loads.test.ts`: calling the extension factory with the fake `ExtensionAPI` does not throw and, as a scaffold, registers no tools/commands/handlers.
 - `package/manifest.test.ts`: `package.json` has `keywords: ["pi-package"]`, a `pi` manifest, correct deps split.
 
 **Implement:** repo layout, tooling configs, an empty `export default (pi) => {}`, the `verify` script, CI workflow.
-**Green light:** `npm run verify` passes; empty extension loads in a real Pi session.
+**Green light:** `npm run verify` passes; the extension factory runs against pi's public `ExtensionAPI` cleanly.
 
 ### M1 — Skills sync (reuse, ~0 logic)
 **Red tests first:**
@@ -126,7 +127,7 @@ Order follows `seed.md`'s build order. Each milestone: **write the red tests fir
 
 ### M2 — Prompt templates
 **Red tests first:**
-- `integration/commands.test.ts`: `/deploy-to-render` and `/check-render-status` appear in `pi.getCommands()` (source = template) and expand to their markdown body.
+- `package/prompts.test.ts`: `prompts/deploy-to-render.md` and `prompts/check-render-status.md` exist with non-empty bodies (the filename becomes the `/command`). Prompt templates are static markdown auto-loaded by pi from `prompts/`, so this is a content assertion, not an API test.
 
 **Implement:** port `prompts/deploy-to-render.md` and `prompts/check-render-status.md` ~1:1 from the Claude Code / opencode plugins.
 **Green light:** verify green.
@@ -134,7 +135,7 @@ Order follows `seed.md`'s build order. Each milestone: **write the red tests fir
 ### M3 — `@render` subagent  *(decision point)*
 Pi's manifest has no native `agents` type. **Default decision:** ship `@render` as a **prompt template persona** (`prompts/render.md`) that frames Render-specialist behavior — lightest parity path. (Alternative, deferred: a true sub-agent-spawning tool à la Pi's `subagent/` example — more code, out of P1 scope.)
 **Red tests first:**
-- `integration/render-agent.test.ts`: the `/render` command is registered and expands to the persona prompt.
+- `package/render-agent.test.ts`: `prompts/render.md` exists with the Render-specialist persona body.
 
 **Implement:** author `prompts/render.md` from `agents/render-assistant.md`.
 **Green light:** verify green. *(If we instead want true sub-agents, re-scope this milestone explicitly.)*
@@ -145,8 +146,8 @@ Pi's manifest has no native `agents` type. **Default decision:** ship `@render` 
 - `unit/format.test.ts`: success output → clean pass result; validation errors → surfaced inline; `ENOENT` → install hint (`brew install render`).
 
 **Red tests first (integration):**
-- `integration/blueprint-hook.test.ts`: with an injected/stubbed runner, editing `render.yaml` triggers `tool_result` enrichment carrying validation output; editing a non-blueprint file does not.
-- `integration/blueprint-tool.test.ts`: `render_validate_blueprint` tool runs the (stubbed) CLI and returns the formatted result; missing CLI yields the install hint, not a crash.
+- `extension/blueprint-hook.test.ts`: after loading the extension, the fake captures a `tool_result` handler and a `render_validate_blueprint` tool. Invoking the captured handler with a synthetic `render.yaml` write event (stubbed runner) enriches the result with validation output; a non-blueprint file event does not.
+- `extension/blueprint-tool.test.ts`: invoking the captured `render_validate_blueprint` `execute` (stubbed CLI runner) returns the formatted result; a missing CLI yields the install hint, not a crash.
 
 **Implement:** `detect.ts`, `format.ts`, pure; `runner.ts` wrapping `execFile("render", ["blueprints","validate"], {cwd})` behind an injectable interface; `hook.ts` wiring into `pi.on("tool_result")` + `pi.registerTool(...)`. Port opencode's `tool.execute.after` logic.
 **Green light:** verify green; hook + tool covered for success / failure / CLI-missing.
@@ -175,7 +176,7 @@ Pi's manifest has no native `agents` type. **Default decision:** ship `@render` 
 **Red tests first:**
 - `package/pack.test.ts`: `npm pack` tarball includes `src/`, `skills/`, `prompts/`, manifest; excludes `tests/`, dev cruft (assert via `files` field).
 
-**Implement:** finalize `files`, README (install, `RENDER_API_KEY`, CLI prereq, re-sync note), CHANGELOG. Optional: an install-verification test using the harness's sandbox-install feature.
+**Implement:** finalize `files`, README (install, `RENDER_API_KEY`, CLI prereq, re-sync note), CHANGELOG.
 **Green light:** verify green; `npm pack` produces a clean, installable tarball.
 
 ---
@@ -203,7 +204,7 @@ Single workflow (`.github/workflows/verify.yml`):
 1. **`@render` as prompt vs. true sub-agent (M3).** Defaulting to a prompt-template persona for parity; true sub-agent spawning is a deferred enhancement. Confirm this satisfies "parity."
 2. ~~**`pi-mcp-adapter` auth wiring (M5).**~~ **Resolved** (see the box in M5): the adapter's per-server schema natively supports both `auth: "oauth"` (interactive default) and `auth: "bearer"` + `bearerTokenEnv: "RENDER_API_KEY"` (CI fallback), so no custom auth code is needed. Remaining note: it's a community dep pinned to pi core — keep the wiring thin so we can swap it or fall back to CLI (`seed.md` §6.2).
 3. **`render` CLI in CI.** We never invoke the real CLI in tests (injected/stubbed runner), so CI needs no `render` binary. The one live check is manual.
-4. **pi core version drift / harness lag.** peerDeps are `"*"`; the test runtime is pinned to pi-core `0.79.10` because the harness predates the pi-ai `getModel`→`createModels` rename (see the box in §2). CI is reproducible via that pin; bump deliberately once a harness targeting pi ≥0.80 exists. Keep extension code within the API common to 0.79.x and current pi.
+4. **No official pi test SDK.** We test glue against the public `ExtensionAPI` via a typed fake (see §2 box), so we track **latest pi** with no runtime-harness dependency. peerDeps stay `"*"`; dev pi-core is pinned to a current `^0.82.1` for reproducible typecheck. If we later need true end-to-end coverage, add a smoke layer with a local OpenAI-compatible endpoint (`registerProvider`/`models.json`) rather than adopting a version-locked harness.
 5. **Skills sync reproducibility.** Pin a `render-oss/skills` SHA; re-sync is an explicit, reviewable PR.
 
 ---
