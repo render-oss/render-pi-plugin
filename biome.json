@@ -12,7 +12,7 @@
   },
   "linter": {
     "enabled": true,
-    "rules": { "preset": "none" }
+    "rules": { "preset": "recommended" }
   },
   "assist": {
     "actions": { "source": { "organizeImports": "on" } }

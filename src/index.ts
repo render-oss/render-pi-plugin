@@ -3,11 +3,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 /**
  * pi-render — Render integration for the Pi coding agent.
  *
- * Phase 1 scaffold (M0): registers nothing yet. Subsequent milestones wire in:
- *   M2 prompt templates, M3 the @render subagent, M4 the blueprint-validate
- *   hook + `render_validate_blueprint` tool, M5 Render MCP access, M6 config.
- * See PLAN.md.
+ * v1 ships two things: the vendored Render skills (declared via `pi.skills` in
+ * package.json — no code path here) and hosted Render MCP access via
+ * `createMcpAdapter(...)(pi)`. See docs/SPEC.md.
  */
 export default function piRender(_pi: ExtensionAPI): void {
-  // Intentionally empty for M0. Behavior lands in M2–M6.
+  // Intentionally empty until the Render MCP adapter is wired in (SPEC.md §4.2).
 }
