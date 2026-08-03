@@ -36,7 +36,10 @@ describe("npm pack tarball", () => {
   it("includes the extension entry point and the manifest", () => {
     expect(packed).toContain("package.json");
     expect(packed).toContain("README.md");
+    expect(packed).toContain("LICENSE");
+    expect(packed).toContain("CHANGELOG.md");
     expect(packed).toContain("src/index.ts");
+    expect(packed).toContain("src/mcp.ts");
   });
 
   it("ships every skill's SKILL.md", () => {
@@ -61,10 +64,15 @@ describe("npm pack tarball", () => {
   it("excludes tests, docs, and local tooling", () => {
     const leaked = packed.filter(
       (path) =>
+        path.startsWith(".github/") ||
         path.startsWith("tests/") ||
         path.startsWith("docs/") ||
+        path.startsWith("scripts/") ||
+        path.startsWith("types/") ||
         path.startsWith("node_modules/") ||
-        /^(biome\.json|tsconfig\.json|vitest\.config\.ts|package-lock\.json)$/.test(path),
+        /^(biome\.json|tsconfig(?:\.[^.]+)?\.json|vitest\.config\.ts|package-lock\.json)$/.test(
+          path,
+        ),
     );
     expect(leaked).toEqual([]);
   });

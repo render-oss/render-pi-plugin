@@ -1,0 +1,76 @@
+name: Sync skills from render-oss/skills
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: sync-skills
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'render-lab/render-pi-plugin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pi-render
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+
+      - name: Install development dependencies
+        run: npm ci
+
+      - name: Sync public Render skills
+        run: ./scripts/sync-skills.sh --repo "https://github.com/render-oss/skills" --ref main
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+
+      - name: Verify synchronized package
+        run: npm run verify
+
+      - name: Ensure sync label exists
+        run: >-
+          gh label create skills-sync
+          --color "1D76DB"
+          --description "Automated update from render-oss/skills"
+          --force
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Create or update sync pull request
+        id: create-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "Sync skills from render-oss/skills"
+          title: "Sync skills from render-oss/skills"
+          body: |
+            Automated update of bundled skills from
+            [render-oss/skills](https://github.com/render-oss/skills).
+
+            The workflow synchronized the public mirror, recorded its exact commit in
+            `skills/.sync-source`, and ran `npm run verify` before opening this PR.
+          branch: sync-skills
+          labels: skills-sync
+          delete-branch: true
+
+      - name: Enable squash auto-merge
+        if: >-
+          vars.SKILLS_SYNC_AUTOMERGE == 'true' &&
+          (steps.create-pr.outputs.pull-request-operation == 'created' ||
+          steps.create-pr.outputs.pull-request-operation == 'updated')
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
+          merge-method: squash

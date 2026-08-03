@@ -1,32 +1,70 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import piRender from "../../src/index";
 import { createFakePi } from "../support/fake-pi";
 
+const adapter = vi.hoisted(() => ({
+  createMcpAdapter: vi.fn(),
+  extension: vi.fn(),
+}));
+
+vi.mock("pi-mcp-adapter", () => ({
+  createMcpAdapter: adapter.createMcpAdapter,
+}));
+
 describe("pi-render extension", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("RENDER_API_KEY", "");
+    adapter.createMcpAdapter.mockReturnValue(adapter.extension);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("default-exports a single factory, which is what `pi.extensions` loads", () => {
     expect(typeof piRender).toBe("function");
     expect(piRender.length).toBeLessThanOrEqual(1);
   });
 
-  it("loads against pi's public ExtensionAPI without throwing", () => {
+  it("hands the isolated Render config to the MCP adapter and invokes it with pi", () => {
     const pi = createFakePi();
-    expect(() => piRender(pi.api)).not.toThrow();
+
+    piRender(pi.api);
+
+    expect(adapter.createMcpAdapter).toHaveBeenCalledOnce();
+    expect(adapter.createMcpAdapter).toHaveBeenCalledWith({
+      config: {
+        mcpServers: {
+          render: {
+            url: "https://mcp.render.com/mcp",
+            auth: "oauth",
+            lifecycle: "lazy",
+            directTools: false,
+          },
+        },
+        settings: {
+          scriptMode: false,
+        },
+      },
+    });
+    expect(adapter.extension).toHaveBeenCalledOnce();
+    expect(adapter.extension).toHaveBeenCalledWith(pi.api);
   });
 
-  it("can be re-invoked, as pi does on /reload", () => {
+  it("creates a fresh adapter extension when pi re-invokes it on reload", () => {
     const pi = createFakePi();
-    piRender(pi.api);
-    // A second load must not double-register: the harness rejects duplicate tool and
-    // command names the way pi would treat them as collisions.
-    expect(() => piRender(pi.api)).not.toThrow();
-  });
+    const firstLoad = vi.fn();
+    const secondLoad = vi.fn();
+    adapter.createMcpAdapter.mockReturnValueOnce(firstLoad).mockReturnValueOnce(secondLoad);
 
-  it("registers nothing and touches no API until MCP wiring lands (SPEC.md §4.2)", () => {
-    const pi = createFakePi();
     piRender(pi.api);
-    expect([...pi.tools.keys()]).toEqual([]);
-    expect([...pi.commands.keys()]).toEqual([]);
-    expect([...pi.handlers.keys()]).toEqual([]);
-    expect(pi.touched).toEqual([]);
+    piRender(pi.api);
+
+    expect(adapter.createMcpAdapter).toHaveBeenCalledTimes(2);
+    expect(firstLoad).toHaveBeenCalledOnce();
+    expect(firstLoad).toHaveBeenCalledWith(pi.api);
+    expect(secondLoad).toHaveBeenCalledOnce();
+    expect(secondLoad).toHaveBeenCalledWith(pi.api);
   });
 });

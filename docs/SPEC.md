@@ -3,9 +3,9 @@
 | | |
 | --- | --- |
 | **Target release** | `0.1.0` ("v1") |
-| **Artifact** | one Pi package, installable via `pi install npm:@render/pi-render` or `pi install git:github.com/render-oss/pi-render` |
-| **Pi baseline** | `@earendil-works/pi-coding-agent` `0.82.1` — every seam in §6 was verified against this version |
-| **Status** | skills complete; MCP access and the release gate outstanding (§10) |
+| **Artifact** | one Pi package, installable via `pi install https://github.com/render-lab/render-pi-plugin` |
+| **Pi baseline** | `@earendil-works/pi-coding-agent` `0.83.0` — automated checks and the extension load path are verified against this version |
+| **Status** | implementation and automated release contents complete; clean-room auth smoke test and publication outstanding (§11) |
 
 This document specifies what `pi-render` is, what it must do, and the interfaces it integrates
 through. It is the single source of truth for scope; earlier scope and planning notes were folded
@@ -47,8 +47,8 @@ not capability: no forked skills, no re-wrapped REST API, no hand-rolled MCP cli
 | Deliverable | Mechanism | Status |
 | --- | --- | --- |
 | Render skills, model-loadable | vendored from `render-oss/skills`, declared via `pi.skills` | complete — 21 skills |
-| Hosted Render MCP access | `pi-mcp-adapter`, configured programmatically | outstanding |
-| Installable package | npm manifest + `files` allowlist | outstanding |
+| Hosted Render MCP access | `pi-mcp-adapter`, configured programmatically | complete |
+| Installable package | Pi manifest + GitHub source + `files` allowlist | complete locally; publication pending |
 
 The complete v1 TypeScript surface is `src/mcp.ts` and `src/index.ts`: build a config object,
 hand it to `createMcpAdapter`, invoke the returned extension with `pi`. Anything larger than
@@ -57,7 +57,7 @@ that is a signal to re-read §2.2.
 ### 2.2 Why v1 is this small
 
 Two properties of Pi make most of the obvious surface area redundant, and both were confirmed
-against pi `0.82.1` rather than assumed:
+against pi `0.83.0` rather than assumed:
 
 1. **Pi already turns every skill into a slash command.** It scans skill locations at startup,
    keeps names and descriptions in context, loads the full `SKILL.md` on demand, and registers
@@ -87,7 +87,7 @@ restate it.** A sibling plugin shipping something is not on its own sufficient j
     "extensions": ["./src/index.ts"],
     "skills": ["./skills"]
   },
-  "files": ["src", "skills", "README.md"]
+  "files": ["src", "skills", "README.md", "LICENSE", "CHANGELOG.md"]
 }
 ```
 
@@ -100,9 +100,9 @@ package at runtime rather than at build time.
 
 | Bucket | Contents | Reason |
 | --- | --- | --- |
-| `dependencies` | `pi-mcp-adapter` | imported at runtime; must survive `--omit=dev` |
+| `dependencies` | `pi-mcp-adapter` at the release-tested exact version (`2.19.0`) | imported at runtime; must survive `--omit=dev`; exact pin prevents an untested adapter feature default from changing the tool surface |
 | `peerDependencies` (all `"*"`) | `@earendil-works/pi-coding-agent`, `-ai`, `-tui`, `typebox` | Pi provides these at runtime; pinning them risks a duplicate, mismatched copy |
-| `devDependencies` | pi core at a current pin (`^0.82.1`), `vitest`, `vite-tsconfig-paths`, `@biomejs/biome`, `typescript`, `@types/node` | typecheck against current pi types; never shipped |
+| `devDependencies` | pi core at the release-tested pin (`0.83.0`), `vitest`, `vite-tsconfig-paths`, `@biomejs/biome`, `typescript`, `@types/node` | typecheck against current pi types; never shipped |
 
 Pi core MUST NOT appear in `dependencies`.
 
@@ -116,15 +116,22 @@ correctness gate only (`--noEmit`) and there MUST NOT be a compile artifact or `
 ```
 pi-render/
 ├── package.json              # pi manifest, deps split, scripts
-├── tsconfig.json             # typecheck-only, ESM, strict
+├── package-lock.json         # reproducible Git-package dependency install
+├── tsconfig.json             # base ESM + strict settings
+├── tsconfig.typecheck.json   # typecheck-only adapter contract mapping
+├── types/                    # narrow contract for adapter's source-only package export
+├── .github/workflows/
+│   ├── verify.yml            # package correctness gate
+│   └── sync-skills.yml       # daily/manual verified skill-sync PR
 ├── biome.json                # lint + format
 ├── vitest.config.ts          # globals + tsconfig-paths
+├── LICENSE, CHANGELOG.md
 ├── src/
 │   ├── index.ts              # extension entry: export default (pi) => { ... }
 │   └── mcp.ts                # buildRenderMcpConfig(env) + adapter composition
 ├── skills/                   # VENDORED from render-oss/skills — generated, committed
 ├── scripts/
-│   └── sync-skills.sh        # clone render-oss/skills @ pinned SHA → skills/
+│   └── sync-skills.sh        # configurable source/ref → distributable skills + provenance
 ├── tests/
 │   ├── support/              # fake-pi.ts (typed ExtensionAPI double)
 │   ├── unit/                 # pure-function tests
@@ -141,14 +148,23 @@ pi-render/
 
 **Requirement.** The package ships Render's OSS skills so the model can load them on demand.
 
-**Source.** `render-oss/skills` is the single source of truth. Skills MUST NOT be forked or
-edited in place; `skills/` is generated output that happens to be committed.
+**Source.** `renderinc/skills` is the source of truth. Its existing Copybara workflow publishes
+the distributable subset to `render-oss/skills`, excluding source-only eval inputs and internal
+documentation. Production `pi-render` syncs MUST read from that public mirror without private-repo
+credentials. Skills MUST NOT be forked or edited in place; `skills/` is generated output that
+happens to be committed.
 
-**Sync.** `scripts/sync-skills.sh` clones the upstream repo at a **pinned commit SHA**, copies
-every `skills/render-*` directory including `references/` and `assets/`, and writes
-`skills/.sync-source` recording the source repo, commit, and timestamp. Re-syncing is a
-deliberate act: bump the pin in its own reviewable pull request. The sync script MUST NOT run
-as part of the verify gate or block CI.
+**Sync.** `scripts/sync-skills.sh` accepts `--repo` and `--ref` (defaulting to the public mirror's
+`main`), resolves the checkout to an exact commit, copies every `skills/render-*` directory with
+its `references/` and `assets/`, applies the public mirror's eval-file exclusions, and writes a
+deterministic `skills/.sync-source` containing source, ref, and commit. `--dest` exists for
+isolated testing. No wall-clock timestamp is recorded, so an unchanged source produces no diff.
+
+`.github/workflows/sync-skills.yml` runs daily at 06:00 UTC and via `workflow_dispatch`, runs the
+sync followed by the full verify gate, then creates or updates a `skills-sync` pull request.
+Squash auto-merge is gated behind `SKILLS_SYNC_AUTOMERGE=true` and MUST remain disabled until the
+verify check is required. Local development MAY point `--repo` at the `renderinc/skills` clone;
+the exclusion transform must produce the same distributable skill files as the public mirror.
 
 **Integration.** Declarative only, through the `pi.skills` manifest field. There is no code
 path — Pi discovers `SKILL.md` files itself.
@@ -183,9 +199,11 @@ a user-visible cost that the README MUST document — with programmatic config t
 disables `/mcp setup`, `/mcp enable`, and `/mcp disable`, and `/mcp status` reports only the
 in-memory config.
 
-**Tool surface.** The adapter proxies all discovered tools through one context-saving proxy
-tool by default and accepts a `directTools` allowlist (`boolean | string[]`) to promote chosen
-tools to first-class registrations. v1 SHOULD ship proxy-by-default plus a curated allowlist.
+**Tool surface.** v1 sets `directTools: false`, exposing discovered tools through the adapter's
+context-saving `mcp` proxy rather than registering every Render operation directly. It also sets
+`settings.scriptMode: false`: adapter `2.19.0` enables the separate `mcp_script` tool by default,
+but that expands v1 beyond the deliberately minimal proxy surface. A curated direct-tool
+allowlist MAY be added later with explicit context-cost and startup-bootstrap tests.
 
 ---
 
@@ -197,20 +215,23 @@ auth logic of its own.
 | Path | Config | Lifecycle | Use |
 | --- | --- | --- | --- |
 | OAuth | `auth: "oauth"` | `lazy` | interactive default |
-| API key | `auth: "bearer"`, `bearerTokenEnv: "RENDER_API_KEY"` | `eager` | CI / non-interactive |
+| API key | `auth: "bearer"`, `bearerTokenEnv: "RENDER_API_KEY"` | `lazy` | CI / non-interactive |
 
 **OAuth** is the interactive default and needs no API key, matching the Claude Code plugin. The
 adapter performs dynamic client registration when `oauth.clientId` is omitted; the user drives
 it with `/mcp-auth render` (or `settings.autoAuth: true`), and credentials land in the OS
 credential store. Headless Linux requires an unlocked libsecret keyring.
 
-**Lifecycle is not a free choice.** `eager` connects at startup, which is fine once a token is
-stored but would prompt on every launch when OAuth has no credentials yet — hence `lazy` on the
-OAuth path, connecting and authenticating on first tool use.
+**Lifecycle is not a free choice.** Both paths are `lazy`, so the adapter does not launch OAuth or
+keep a Render connection open at startup. The adapter has one documented exception: when its
+metadata cache does not exist, the first session makes a best-effort connection to populate it.
+Failure is contained to MCP and MUST NOT prevent Pi or the Render skills from loading. Authenticated
+operations connect on demand after that bootstrap.
 
 `RENDER_API_KEY` MUST be passed by environment variable reference (`bearerTokenEnv`), never
-inlined as a literal. This package never reads the variable itself, so the secret does not pass
-through code we own.
+inlined as a literal. This package checks only whether a non-empty value is present to select the
+auth mode; the adapter resolves the value when connecting, so the secret never enters the config
+object or logs.
 
 Absence of a key is not an error: it selects the OAuth path.
 
@@ -218,7 +239,7 @@ Absence of a key is not an error: it selects the OAuth path.
 
 ## 6. Integration seams
 
-Every seam below exists in pi `0.82.1` as described. Note how little they touch each other —
+Every seam below exists in pi `0.83.0` as described. Note how little they touch each other —
 the components are independent paths into Pi and share no state, which is what keeps the glue
 thin and the deferred work cheap to add later.
 
@@ -227,7 +248,7 @@ thin and the deferred work cheap to add later.
 | Skills | `pi.skills` manifest field → Pi discovers `SKILL.md` | declarative |
 | Extension code | `pi.extensions` → `export default (pi: ExtensionAPI) => void` | code |
 | Render MCP | `createMcpAdapter({ config })` returns `(pi: ExtensionAPI) => …`, composed by calling it | code |
-| Skills freshness | `git clone` at a pinned SHA | build-time |
+| Skills freshness | Copybara public mirror → configurable clone → resolved SHA → daily verified PR | build-time |
 
 Seams reserved for deferred work: `pi.on("tool_result", …)` for hooks, `pi.registerTool(…)` for
 model-callable tools, and `pi.exec(command, args, options)` for subprocesses (§9.3).
@@ -315,6 +336,14 @@ bounds the total size of that block as a regression guard.
 One workflow, `.github/workflows/verify.yml`: on push to `main` and on pull requests, check out,
 set up Node, `npm ci`, `npm run verify`. This check SHOULD be required by branch protection.
 
+A second workflow, `.github/workflows/sync-skills.yml`, runs on a daily schedule and manual
+dispatch. It uses only `render-oss/skills`, verifies the synchronized tree before creating a PR,
+and creates the `skills-sync` label if needed. `peter-evans/create-pull-request@v7` owns a stable
+`sync-skills` branch so repeated runs update one PR rather than creating duplicates.
+Public-origin changes travel back through the existing reverse-Copybara PR workflow and can
+temporarily lead `renderinc/skills` until that PR merges; therefore the public mirror remains the
+release input, and local-clone output MUST be compared before release use.
+
 Biome's lint rules MUST stay on a real preset (`recommended`). A `"preset": "none"` configuration
 leaves `biome check` validating formatting only, which makes the gate's lint step decorative.
 
@@ -331,11 +360,13 @@ Before publishing:
    `files` allowlist.
 2. README covers installation, OAuth via `/mcp-auth render`, `RENDER_API_KEY` for CI, the
    `/mcp` subcommand limitation from §4.2, and how to re-sync skills.
-3. Manual smoke test, once, outside CI: `pi -e .`, then `/mcp-auth render` (or
+3. Manual smoke test, once, outside CI:
+   `pi -e https://github.com/render-lab/render-pi-plugin`, then `/mcp-auth render` (or
    `RENDER_API_KEY`), and confirm it lists Render services.
 4. Version `0.1.0`, with release notes stating v1 is a subset of the sibling plugins (§1.1).
 
-Distribution is npm as `@render/pi-render` and/or git under `render-oss`.
+Distribution for v0.1.0 is the public Git repository
+`https://github.com/render-lab/render-pi-plugin`; npm publication is out of scope for this release.
 
 ---
 
@@ -378,7 +409,7 @@ injectable runner for the subprocess; a `hook` module wiring `pi.on("tool_result
 `pi.registerTool`. Cover success, validation failure, and `ENOENT` → install hint
 (`brew install render`).
 
-Two corrections from auditing the seams against pi `0.82.1`, both of which would otherwise
+Two corrections from auditing the seams against pi `0.83.0`, both of which would otherwise
 produce a quietly broken hook:
 
 - **`ToolResultEventResult.content` replaces the tool's content — it does not append.**
@@ -393,34 +424,44 @@ the extension registers nothing.
 
 ### 9.4 Auth and config module — dissolved
 
-An earlier plan called for `config.ts` and `cli.ts`. Neither is needed: the adapter resolves
-`RENDER_API_KEY` via `bearerTokenEnv` so this package never reads it, a `directTools` allowlist
-is one field in the §4.2 config object, and `render`-on-PATH detection existed only to serve
-§9.3.
+An earlier plan called for `config.ts` and `cli.ts`. Neither is needed: this package checks only
+for the presence of `RENDER_API_KEY`, while the adapter resolves its value via `bearerTokenEnv`;
+`directTools` is one field in the §4.2 config object; and `render`-on-PATH detection existed only
+to serve §9.3.
 
 ---
 
 ## 10. Risks and constraints
 
-1. **`pi-mcp-adapter` is a community dependency pinned to pi core.** At `2.15.0` it dev-pins pi
-   `0.79.10` while this package targets `0.82.1`. It is the right call for v1 — hand-rolling an
-   MCP client is far more risk — but the wiring MUST stay thin enough to swap the adapter, or
-   fall back to the `render` CLI, if it goes stale.
+1. **`pi-mcp-adapter` is a community dependency tested against older pi core.** At `2.19.0` it
+   dev-pins pi `0.79.10` while this package targets `0.83.0`. It is the right call for v1 —
+   hand-rolling an MCP client is far more risk — but the wiring MUST stay thin enough to swap the
+   adapter, or fall back to the `render` CLI, if it goes stale.
 2. **v1 is not at parity with the sibling plugins.** Accepted and deliberate (§1.1). The risk is
    communication, not engineering: do not let release notes or docs imply otherwise.
 3. **No official pi test SDK.** Mitigated by the public-API fake (§7.2). Peer dependencies stay
    `"*"`; dev pi core stays pinned to a current version for reproducible typechecking.
-4. **Skills can drift from upstream.** The pinned SHA makes drift explicit and reviewable rather
-   than silent. The cost is that re-syncing is a deliberate task someone must remember to do.
+4. **Skills can drift from upstream.** Deterministic provenance makes drift explicit, while the
+   daily workflow bounds detection to one day and opens a verified reviewable PR. A disabled or
+   failing schedule remains visible as GitHub Actions health and can be retried through manual
+   dispatch.
 5. **OAuth needs a working credential store.** Headless Linux requires an unlocked libsecret
    keyring; `RENDER_API_KEY` is the documented escape hatch.
+6. **The current Pi development package has development-only audit findings.** Pi `0.83.0`'s
+   nested dependency tree currently reports advisories for `brace-expansion` and `undici`. They
+   are absent from `npm ci --omit=dev` and the shipped dependency audit is clean; recheck when a
+   newer Pi release updates its shrinkwrap.
 
 ---
 
 ## 11. Outstanding work
 
-1. **MCP access (§4.2, §5).** `buildRenderMcpConfig(env)` with unit tests first, then the
-   `createMcpAdapter(...)(pi)` composition in `src/index.ts`. Relax `loads.test.ts`, which
-   asserts the extension registers nothing.
-2. **Manual smoke test (§8.2).**
-3. **Release gate (§8.2).** `files` allowlist, README, CHANGELOG, `0.1.0`.
+1. **Clean-room live auth smoke test (§8.2).** Exercise OAuth and `RENDER_API_KEY` from the
+   published Git source and confirm a Render service listing.
+2. **Publication.** Push the verified commit to the public `render-lab/render-pi-plugin` repository,
+   enable required CI, tag `v0.1.0`, and verify the guide's exact installation command.
+3. **Hosted sync validation.** Run `sync-skills.yml` manually after publication, confirm the
+   current upstream produces no PR, then validate one controlled source change opens a verified
+   PR with updated provenance.
+4. **Source/public reconciliation.** Merge the reverse-sync of public OAuth skill change
+   `render-oss/skills@4e4a00a` into `renderinc/skills`, then re-run the local/public parity check.

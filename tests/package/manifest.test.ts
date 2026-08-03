@@ -10,7 +10,11 @@ interface Manifest {
   version?: string;
   description?: string;
   license?: string;
+  repository?: { type?: string; url?: string };
+  homepage?: string;
+  bugs?: { url?: string };
   type?: string;
+  engines?: { node?: string };
   keywords?: string[];
   pi?: { extensions?: string[]; skills?: string[]; prompts?: string[] };
   files?: string[];
@@ -53,7 +57,7 @@ describe("package manifest", () => {
   it("keeps runtime deps installable under --omit=dev", () => {
     // Pi installs packages with --omit=dev, so anything imported at runtime must be a
     // real dependency and pi core must NOT be, or the install duplicates pi.
-    expect(pkg.dependencies?.["pi-mcp-adapter"]).toBeDefined();
+    expect(pkg.dependencies?.["pi-mcp-adapter"]).toBe("2.19.0");
     for (const core of PI_CORE) {
       expect(pkg.dependencies?.[core], `${core} must not be a hard dependency`).toBeUndefined();
     }
@@ -67,7 +71,10 @@ describe("package manifest", () => {
 
   it("dev-depends on pi core so typecheck runs against current pi types", () => {
     for (const core of PI_CORE) {
-      expect(pkg.devDependencies?.[core], `${core} missing from devDependencies`).toBeDefined();
+      expect(
+        pkg.devDependencies?.[core],
+        `${core} is not pinned to the release-tested version`,
+      ).toBe("0.83.0");
     }
   });
 
@@ -81,6 +88,8 @@ describe("package manifest", () => {
   it("ships source and skills while excluding tests and tooling", () => {
     expect(pkg.files).toContain("src");
     expect(pkg.files).toContain("skills");
+    expect(pkg.files).toContain("LICENSE");
+    expect(pkg.files).toContain("CHANGELOG.md");
     for (const excluded of ["tests", "docs", "biome.json", "tsconfig.json", "vitest.config.ts"]) {
       expect(pkg.files, `${excluded} must not be in files`).not.toContain(excluded);
     }
@@ -96,10 +105,18 @@ describe("package manifest", () => {
     }
   });
 
-  it("carries the metadata npm needs to publish", () => {
+  it("carries the metadata for the v0.1.0 GitHub release", () => {
     expect(pkg.name).toBe("@render/pi-render");
-    expect(pkg.version).toBeDefined();
-    expect(pkg.license).toBeDefined();
+    expect(pkg.version).toBe("0.1.0");
+    expect(pkg.license).toBe("MIT");
+    expect(readFileSync(join(repoRoot, "LICENSE"), "utf8")).toContain("MIT License");
     expect(pkg.description?.length ?? 0).toBeGreaterThan(20);
+    expect(pkg.repository).toEqual({
+      type: "git",
+      url: "git+https://github.com/render-lab/render-pi-plugin.git",
+    });
+    expect(pkg.homepage).toBe("https://github.com/render-lab/render-pi-plugin#readme");
+    expect(pkg.bugs?.url).toBe("https://github.com/render-lab/render-pi-plugin/issues");
+    expect(pkg.engines?.node).toBe(">=22.19.0");
   });
 });

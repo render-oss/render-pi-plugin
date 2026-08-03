@@ -12,7 +12,6 @@ import { describe, expect, it } from "vitest";
  * the complaints a user would hit at startup.
  */
 const skillsDir = fileURLToPath(new URL("../../skills", import.meta.url));
-const syncScript = fileURLToPath(new URL("../../scripts/sync-skills.sh", import.meta.url));
 
 /** Core skills v1 must ship (SPEC.md §4.1). */
 const REQUIRED = [
@@ -47,6 +46,13 @@ function markdownFiles(dir: string): string[] {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return markdownFiles(path);
     return entry.name.endsWith(".md") ? [path] : [];
+  });
+}
+
+function allFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    return entry.isDirectory() ? allFiles(path) : [path];
   });
 }
 
@@ -127,19 +133,28 @@ describe("vendored Render skills", () => {
     expect(empty).toEqual([]);
   });
 
-  it("pins an upstream commit that matches the sync script", () => {
-    // Drift between the script's PIN and what is vendored means `skills/` is not reproducible.
+  it("records deterministic upstream provenance", () => {
     const provenance = join(skillsDir, ".sync-source");
     expect(existsSync(provenance), "skills/.sync-source missing").toBe(true);
 
-    const vendored = readFileSync(provenance, "utf8").match(/commit: ([0-9a-f]{40})/)?.[1];
-    const pinned = readFileSync(syncScript, "utf8").match(/^PIN="([0-9a-f]{40})"/m)?.[1];
+    const record = readFileSync(provenance, "utf8");
+    const source = record.match(/^source: (.+)$/m)?.[1];
+    const ref = record.match(/^ref: (.+)$/m)?.[1];
+    const commit = record.match(/^commit: ([0-9a-f]{40})$/m)?.[1];
 
-    expect(vendored, "no 40-char commit recorded in .sync-source").toBeDefined();
-    expect(pinned, "no 40-char PIN in sync-skills.sh").toBeDefined();
-    expect(vendored, "vendored skills do not match the pinned commit — re-run sync-skills").toBe(
-      pinned,
-    );
+    expect(source).toBe("https://github.com/render-oss/skills");
+    expect(ref).toBe("main");
+    expect(commit, "no 40-char commit recorded in .sync-source").toBeDefined();
+    expect(record).not.toMatch(/^synced:/m);
+  });
+
+  it("excludes source-only evaluation files", () => {
+    const excludedNames = new Set(["evals.json", "skillet.eval.yaml", "EVALS.md"]);
+    const leaked = skillDirs()
+      .flatMap((dir) => allFiles(join(skillsDir, dir)))
+      .filter((file) => excludedNames.has(basename(file)));
+
+    expect(leaked).toEqual([]);
   });
 
   it("keeps the standing system-prompt cost bounded", () => {

@@ -1,4 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createMcpAdapter } from "pi-mcp-adapter";
+import { buildRenderMcpConfig } from "./mcp";
 
 /**
  * pi-render — Render integration for the Pi coding agent.
@@ -7,6 +9,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
  * package.json — no code path here) and hosted Render MCP access via
  * `createMcpAdapter(...)(pi)`. See docs/SPEC.md.
  */
-export default function piRender(_pi: ExtensionAPI): void {
-  // Intentionally empty until the Render MCP adapter is wired in (SPEC.md §4.2).
+export default function piRender(pi: ExtensionAPI): void {
+  createMcpAdapter({ config: buildRenderMcpConfig(process.env) })(pi);
 }
