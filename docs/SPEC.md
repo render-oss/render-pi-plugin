@@ -102,7 +102,7 @@ package at runtime rather than at build time.
 | --- | --- | --- |
 | `dependencies` | `pi-mcp-adapter` at the release-tested exact version (`2.19.0`) | imported at runtime; must survive `--omit=dev`; exact pin prevents an untested adapter feature default from changing the tool surface |
 | `peerDependencies` (all `"*"`) | `@earendil-works/pi-coding-agent`, `-ai`, `-tui`, `typebox` | Pi provides these at runtime; pinning them risks a duplicate, mismatched copy |
-| `devDependencies` | pi core at the release-tested pin (`0.83.0`), `vitest`, `vite-tsconfig-paths`, `@biomejs/biome`, `typescript`, `@types/node` | typecheck against current pi types; never shipped |
+| `devDependencies` | pi core at the release-tested pin (`0.83.0`), `vitest`, `@biomejs/biome`, `typescript`, `@types/node` | typecheck against current pi types; never shipped |
 
 Pi core MUST NOT appear in `dependencies`.
 
