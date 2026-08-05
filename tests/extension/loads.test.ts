@@ -39,6 +39,7 @@ describe("pi-render extension", () => {
           render: {
             url: "https://mcp.render.com/mcp",
             auth: "oauth",
+            oauth: { clientId: "pi" },
             lifecycle: "lazy",
             directTools: false,
           },

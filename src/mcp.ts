@@ -1,10 +1,22 @@
 const RENDER_MCP_URL = "https://mcp.render.com/mcp";
 const RENDER_API_KEY_ENV = "RENDER_API_KEY";
 
+/**
+ * Render's authorization server publishes no `registration_endpoint`, so dynamic client
+ * registration cannot work. The adapter only falls back to registration when `oauth.clientId`
+ * is omitted, which is why this MUST stay set: without it every OAuth attempt fails at the
+ * probe with a 401 and a misleading "does not appear to speak MCP" error.
+ *
+ * The value is a public, pre-registered client ID, matching the sibling plugins' `claude`,
+ * `cursor`, and `codex`. It is not a secret and there is no client secret: Render registers
+ * these as public PKCE clients.
+ */
+const RENDER_OAUTH_CLIENT_ID = "pi";
+
 export type RenderMcpEnvironment = Readonly<Record<string, string | undefined>>;
 
 type RenderMcpAuth =
-  | { auth: "oauth" }
+  | { auth: "oauth"; oauth: { clientId: typeof RENDER_OAUTH_CLIENT_ID } }
   | { auth: "bearer"; bearerTokenEnv: typeof RENDER_API_KEY_ENV };
 
 export interface RenderMcpConfig {
@@ -29,7 +41,7 @@ export interface RenderMcpConfig {
 export function buildRenderMcpConfig(env: RenderMcpEnvironment): RenderMcpConfig {
   const auth: RenderMcpAuth = env[RENDER_API_KEY_ENV]
     ? { auth: "bearer" as const, bearerTokenEnv: RENDER_API_KEY_ENV }
-    : { auth: "oauth" as const };
+    : { auth: "oauth" as const, oauth: { clientId: RENDER_OAUTH_CLIENT_ID } };
 
   return {
     mcpServers: {

@@ -214,13 +214,23 @@ auth logic of its own.
 
 | Path | Config | Lifecycle | Use |
 | --- | --- | --- | --- |
-| OAuth | `auth: "oauth"` | `lazy` | interactive default |
+| OAuth | `auth: "oauth"`, `oauth.clientId: "pi"` | `lazy` | interactive default |
 | API key | `auth: "bearer"`, `bearerTokenEnv: "RENDER_API_KEY"` | `lazy` | CI / non-interactive |
 
-**OAuth** is the interactive default and needs no API key, matching the Claude Code plugin. The
-adapter performs dynamic client registration when `oauth.clientId` is omitted; the user drives
-it with `/mcp-auth render` (or `settings.autoAuth: true`), and credentials land in the OS
+**OAuth** is the interactive default and needs no API key, matching the Claude Code plugin. The user
+drives it with `/mcp-auth render` (or `settings.autoAuth: true`), and credentials land in the OS
 credential store. Headless Linux requires an unlocked libsecret keyring.
+
+`oauth.clientId` is **required, not optional**. Render's authorization server
+(`https://api.render.com`, discovered through the MCP server's protected-resource metadata)
+publishes `authorization_code` and `refresh_token` grants with S256 PKCE and no
+`registration_endpoint`. Dynamic client registration is therefore impossible. The adapter attempts
+registration precisely when `oauth.clientId` is omitted, and that attempt fails with a 401 and a
+misleading "does not appear to speak MCP" error, breaking the default auth path for every user.
+
+Render pre-registers one public PKCE client per integration — `claude`, `cursor`, `codex`, and `pi`
+for this package. These IDs are public and carry no client secret. This is why the Claude Code
+plugin ships `oauth.clientId: "claude"` rather than relying on registration.
 
 **Lifecycle is not a free choice.** Both paths are `lazy`, so the adapter does not launch OAuth or
 keep a Render connection open at startup. The adapter has one documented exception: when its
