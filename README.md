@@ -35,6 +35,11 @@ connection to populate its local tool-metadata cache, but it does not open an OA
 bootstrap cannot connect, Pi and the Render skills continue to work; authenticated MCP operations
 connect on demand.
 
+Because that bootstrap runs before you have credentials, the first session reports once that the
+Render server requires authentication (an HTTP 401). This is expected, not a failure — Pi and all
+21 skills load normally. Run `/mcp-auth render` when you want the Render tools, and the notice
+stops.
+
 ## Auth
 
 - **OAuth (recommended, interactive):** run `/mcp-auth render` in a session — no API key needed.

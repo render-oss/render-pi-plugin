@@ -238,6 +238,12 @@ metadata cache does not exist, the first session makes a best-effort connection 
 Failure is contained to MCP and MUST NOT prevent Pi or the Render skills from loading. Authenticated
 operations connect on demand after that bootstrap.
 
+The bootstrap is unconditional and the adapter exposes no setting to suppress it, so on a clean run
+with no credentials it reports an HTTP 401 once. `settings.autoAuth` stays at its default of `false`,
+which is what keeps that from escalating into an unprompted browser flow. `README.md` MUST set this
+expectation, because a first-run 401 that looks like breakage is the difference between an install
+users trust and one they abandon.
+
 `RENDER_API_KEY` MUST be passed by environment variable reference (`bearerTokenEnv`), never
 inlined as a literal. This package checks only whether a non-empty value is present to select the
 auth mode; the adapter resolves the value when connecting, so the secret never enters the config
