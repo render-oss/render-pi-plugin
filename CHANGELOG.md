@@ -12,7 +12,7 @@ Initial GitHub release of the Render integration for the Pi coding agent.
 - Interactive OAuth via `/mcp-auth render`.
 - Non-interactive bearer authentication through `RENDER_API_KEY` without copying the token into
   package configuration.
-- One-command installation from `https://github.com/render-lab/render-pi-plugin`.
+- One-command installation from `https://github.com/render-oss/render-pi-plugin`.
 
 ### Scope
 

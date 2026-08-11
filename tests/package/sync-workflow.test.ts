@@ -11,7 +11,7 @@ describe("skills sync workflow", () => {
   it("runs daily and supports manual dispatch", () => {
     expect(workflow).toContain('cron: "0 6 * * *"');
     expect(workflow).toContain("workflow_dispatch:");
-    expect(workflow).toContain("github.repository == 'render-lab/render-pi-plugin'");
+    expect(workflow).toContain("github.repository == 'render-oss/render-pi-plugin'");
   });
 
   it("syncs only from the public skills mirror", () => {

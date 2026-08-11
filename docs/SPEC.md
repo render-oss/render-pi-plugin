@@ -3,7 +3,7 @@
 | | |
 | --- | --- |
 | **Target release** | `0.1.0` ("v1") |
-| **Artifact** | one Pi package, installable via `pi install https://github.com/render-lab/render-pi-plugin` |
+| **Artifact** | one Pi package, installable via `pi install https://github.com/render-oss/render-pi-plugin` |
 | **Pi baseline** | `@earendil-works/pi-coding-agent` `0.83.0` — automated checks and the extension load path are verified against this version |
 | **Status** | implementation and automated release contents complete; clean-room auth smoke test and publication outstanding (§11) |
 
@@ -377,12 +377,12 @@ Before publishing:
 2. README covers installation, OAuth via `/mcp-auth render`, `RENDER_API_KEY` for CI, the
    `/mcp` subcommand limitation from §4.2, and how to re-sync skills.
 3. Manual smoke test, once, outside CI:
-   `pi -e https://github.com/render-lab/render-pi-plugin`, then `/mcp-auth render` (or
+   `pi -e https://github.com/render-oss/render-pi-plugin`, then `/mcp-auth render` (or
    `RENDER_API_KEY`), and confirm it lists Render services.
 4. Version `0.1.0`, with release notes stating v1 is a subset of the sibling plugins (§1.1).
 
 Distribution for v0.1.0 is the public Git repository
-`https://github.com/render-lab/render-pi-plugin`; npm publication is out of scope for this release.
+`https://github.com/render-oss/render-pi-plugin`; npm publication is out of scope for this release.
 
 ---
 
@@ -474,7 +474,7 @@ to serve §9.3.
 
 1. **Clean-room live auth smoke test (§8.2).** Exercise OAuth and `RENDER_API_KEY` from the
    published Git source and confirm a Render service listing.
-2. **Publication.** Push the verified commit to the public `render-lab/render-pi-plugin` repository,
+2. **Publication.** Push the verified commit to the public `render-oss/render-pi-plugin` repository,
    enable required CI, tag `v0.1.0`, and verify the guide's exact installation command.
 3. **Hosted sync validation.** Run `sync-skills.yml` manually after publication, confirm the
    current upstream produces no PR, then validate one controlled source change opens a verified
