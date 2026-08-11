@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   sync:
-    if: github.repository == 'render-lab/render-pi-plugin'
+    if: github.repository == 'render-oss/render-pi-plugin'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

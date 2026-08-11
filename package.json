@@ -8,11 +8,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/render-lab/render-pi-plugin.git"
+    "url": "git+https://github.com/render-oss/render-pi-plugin.git"
   },
-  "homepage": "https://github.com/render-lab/render-pi-plugin#readme",
+  "homepage": "https://github.com/render-oss/render-pi-plugin#readme",
   "bugs": {
-    "url": "https://github.com/render-lab/render-pi-plugin/issues"
+    "url": "https://github.com/render-oss/render-pi-plugin/issues"
   },
   "type": "module",
   "engines": {

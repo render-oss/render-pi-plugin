@@ -113,10 +113,10 @@ describe("package manifest", () => {
     expect(pkg.description?.length ?? 0).toBeGreaterThan(20);
     expect(pkg.repository).toEqual({
       type: "git",
-      url: "git+https://github.com/render-lab/render-pi-plugin.git",
+      url: "git+https://github.com/render-oss/render-pi-plugin.git",
     });
-    expect(pkg.homepage).toBe("https://github.com/render-lab/render-pi-plugin#readme");
-    expect(pkg.bugs?.url).toBe("https://github.com/render-lab/render-pi-plugin/issues");
+    expect(pkg.homepage).toBe("https://github.com/render-oss/render-pi-plugin#readme");
+    expect(pkg.bugs?.url).toBe("https://github.com/render-oss/render-pi-plugin/issues");
     expect(pkg.engines?.node).toBe(">=22.19.0");
   });
 });
