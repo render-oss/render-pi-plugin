@@ -10,7 +10,7 @@ skills and the control plane, not the slash commands, subagent, or Blueprint hoo
 ## Install
 
 ```bash
-pi install https://github.com/render-lab/render-pi-plugin
+pi install https://github.com/render-oss/render-pi-plugin
 ```
 
 Pi installs the package's runtime dependencies, including its MCP adapter. There is no separate
@@ -19,7 +19,7 @@ MCP package or MCP support prerequisite to install.
 For a reproducible install pinned to this release:
 
 ```bash
-pi install https://github.com/render-lab/render-pi-plugin@v0.1.0
+pi install https://github.com/render-oss/render-pi-plugin@v0.1.0
 ```
 
 ## What you get (v1)
@@ -62,7 +62,7 @@ the MCP tools but keeps every `/skill:render-*` command available.
 
 ```bash
 pi update --extensions
-pi remove https://github.com/render-lab/render-pi-plugin
+pi remove https://github.com/render-oss/render-pi-plugin
 ```
 
 An install pinned to `@v0.1.0` stays pinned; install a newer tag explicitly to move it forward.
