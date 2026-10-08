@@ -35,7 +35,7 @@ list_logs(
 - Missing dependencies in package.json/requirements.txt
 - Build command syntax errors
 - Missing environment variables during build
-- Build timeout (>15 min on free tier)
+- Build timeout (120-minute build-command limit)
 
 ---
 
@@ -292,6 +292,6 @@ get_metrics(
 
 # 4. Verify:
 # - App binds to 0.0.0.0:$PORT
-# - Health check endpoint exists
-# - App starts within timeout (300s default)
+# - Configured health check endpoint exists and responds quickly
+# - App becomes ready within the current window documented in deployments.md
 ```

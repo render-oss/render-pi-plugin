@@ -65,12 +65,7 @@ get_metrics(
 | 85-95% | Danger | Investigate immediately |
 | >95% | Critical | OOM imminent |
 
-**Memory limits by plan:**
-| Plan | Memory |
-|------|--------|
-| Free/Starter | 512 MB |
-| Standard | 2 GB |
-| Pro | 4 GB |
+Use the resource's reported memory limit instead of inferring capacity from a legacy plan name. When the current plan specification matters, fetch it using [compute-plans.md](compute-plans.md).
 
 **High memory causes:**
 - Memory leaks (objects not garbage collected)

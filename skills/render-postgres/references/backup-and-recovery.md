@@ -33,8 +33,8 @@ Test restore procedures on a **non-production** database periodically.
 
 ## Plan and instance migration
 
-- **Upgrading** instance type / plan is supported; expect **brief downtime** (reduced with **high availability** where enabled).
-- **Downgrading** from **current-generation** plans back to **legacy** types is **not** supported after you have moved forward—plan instance families deliberately.
+- **Changing** the compute plan is supported; expect **brief downtime** (reduced with **high availability** where enabled).
+- After moving from a **legacy** compute plan to a current Plan ID, do not assume you can move back—choose plan families deliberately and consult `compute-plans.md`.
 
 ## Cross-region
 

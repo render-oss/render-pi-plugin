@@ -1,6 +1,6 @@
 # Private network communication patterns
 
-Architecture examples and implementation notes for Render’s private network. Pair with the main `SKILL.md` for limits (region, workspace, free tier, ports).
+Architecture examples and implementation notes for Render’s private network. Read [private-networking.md](private-networking.md) first for current platform behavior and limits.
 
 ## Gateway pattern
 
@@ -23,7 +23,6 @@ Architecture examples and implementation notes for Render’s private network. P
 **Flow:** Multiple **Private Services** (and optionally internal ports on Web Services) call each other by **internal hostnames**.
 
 - Standardize on one scheme (`http` vs `https`) per hop; some clients require an explicit `http://` or `https://` prefix.
-- For cross-service **health checks**, use the private hostname:port from a service that is allowed to initiate private egress (e.g., another Private Service or Web Service), not from a Static Site or from a Worker if you need the target to be another compute service’s inbound port.
 
 ## URL construction
 
@@ -44,15 +43,10 @@ In `render.yaml`, link services for private access using **`fromService`** on th
 
 Ensure the producer service type supports private networking and that region/workspace match the consumer.
 
-## Discovery hostname for custom load balancing
+## Per-instance discovery
 
-When a service scales to multiple instances:
+Use per-instance discovery only when the application must implement custom instance selection, retries, health aggregation, or per-instance metrics. Prefer the normal internal hostname for ordinary service-to-service calls. Follow [private-networking.md](private-networking.md) for the current discovery hostname and resolver behavior.
 
-- The **`[hostname]-discovery`** name resolves to **all** instance IPs.
-- Combine with **`RENDER_DISCOVERY_SERVICE`** where provided to drive custom selection, retries, or metrics per instance.
-- Useful when round-robin or sticky behavior must be implemented in application code rather than relying on a single internal A-record.
+## Crossing private-network boundaries
 
-## Cross-service health checking via private network
-
-- Prefer health endpoints bound to the **private** listener port when checks originate from another Render service in the same region/workspace.
-- Avoid assuming public health URLs are equivalent to private reachability; firewalls, bindings, and `PORT` vs extra ports differ for multi-port web services.
+When resources intentionally span regions, workspaces, or isolated project environments, either colocate them or design an explicit supported integration path such as an authenticated public endpoint or data replication. Do not expose an otherwise private service merely as a troubleshooting shortcut.

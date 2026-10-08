@@ -23,30 +23,11 @@ Activate this skill when users want to:
 - Investigate slow performance
 - Check database health
 
-## Prerequisites
+## Render Access
 
-**MCP tools (preferred):** Test with `list_services()` - provides structured data
+Before reading service state, logs, metrics, or database health, follow `references/render-access.md` to establish access and verify the intended workspace. Prefer MCP when available; the CLI can provide service status and logs, while metrics and database queries require MCP.
 
-**CLI (fallback):** `render --version` - use if MCP tools unavailable
-
-**Authentication:** If you installed the Render plugin (Cursor, Codex, Claude Code), it provides OAuth for MCP — complete the OAuth prompt. For manual MCP clients, use a Render API key. For CLI, verify with `render whoami -o json`.
-
-**Workspace:** `get_selected_workspace()` or `render workspace current -o json`
-
-> **Note:** MCP tools require the Render MCP server. If unavailable, use the CLI for status and logs; metrics and database queries require MCP.
-
-## MCP Setup
-
-If `list_services()` fails, set up the Render MCP server. For detailed per-tool walkthroughs, see **render-mcp**.
-
-**Plugin setup:** If the Render plugin is installed, complete Render OAuth when prompted, then reload your tool and retry `list_services()`.
-
-**Manual MCP setup:** Add the Render MCP server to your AI tool's MCP config:
-- **URL:** `https://mcp.render.com/mcp`
-- **Auth header:** `Authorization: Bearer <YOUR_API_KEY>`
-- **API key:** `https://dashboard.render.com/u/*/settings#api-keys`
-
-After configuring, restart your tool and retry `list_services()`. Then set your workspace with `list_workspaces()` / `get_selected_workspace()`.
+Before interpreting deploy or health-check state, read `references/deployments.md`.
 
 ---
 
@@ -91,12 +72,7 @@ get_service(serviceId: "<id>")
 list_deploys(serviceId: "<service-id>", limit: 5)
 ```
 
-| Status | Meaning |
-|--------|---------|
-| `live` | Deployment successful |
-| `build_in_progress` | Building |
-| `build_failed` | Build failed |
-| `deactivated` | Replaced by newer deploy |
+Follow `references/deployments.md` to interpret asynchronous and terminal states, identify the specific deploy, and verify the workload after it becomes live.
 
 ### Check Errors
 
@@ -304,7 +280,6 @@ render ssh <service-id>
 
 | Indicator | Healthy | Warning | Critical |
 |-----------|---------|---------|----------|
-| Deploy Status | `live` | `update_in_progress` | `build_failed` |
 | Error Rate | <0.1% | 0.1-1% | >1% |
 | p95 Latency | <500ms | 500ms-2s | >2s |
 | CPU Usage | <70% | 70-90% | >90% |
@@ -314,10 +289,26 @@ render ssh <service-id>
 
 ## References
 
+- **Render access:** [references/render-access.md](references/render-access.md)
+- **Compute plans:** [references/compute-plans.md](references/compute-plans.md)
+- **Deployments:** [references/deployments.md](references/deployments.md)
 - **Metrics guide:** [references/metrics-guide.md](references/metrics-guide.md)
 
 ## Related Skills
 
 - **render-deploy** — Deploy new applications to Render
 - **render-debug** — Diagnose and fix deployment failures
-- **render-mcp** — MCP server setup and tool catalog
+- **render-mcp** — MCP server setup and capability discovery
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

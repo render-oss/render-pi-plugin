@@ -31,11 +31,13 @@ Render uses **BuildKit** for Docker builds. All compute service types that suppo
 
 For full Blueprint authoring, see **render-blueprints**. For end-to-end deploy flows, see **render-deploy**.
 
+Before deploying a built or prebuilt image, read `references/deployments.md` for current trigger, lifecycle, health-check, and signal behavior.
+
 ## Render Docker Builds
 
 - **BuildKit** is used for Docker builds on Render.
 - **`runtime: docker`**: Render builds an image from your repo using `dockerfilePath`, `dockerContext`, and optional `dockerCommand` (overrides image `CMD`).
-- **`runtime: image`**: Render pulls **`image.url`**; no repo-based image build. Pair with **`registryCredential`** when the registry is private.
+- **`runtime: image`**: Render pulls **`image.url`**; no repo-based image build. Set **`image.creds.fromRegistryCreds.name`** when the registry is private.
 
 ## Blueprint Configuration
 
@@ -45,7 +47,8 @@ For full Blueprint authoring, see **render-blueprints**. For end-to-end deploy f
 | `dockerContext` | Build context directory (what is sent to the daemon) |
 | `dockerCommand` | Overrides the container `CMD` after the image is built |
 | `image.url` | Image reference for `runtime: image` (registry/repo:tag or digest) |
-| `registryCredential` | Auth for private pulls; often `fromRegistryCreds` → Dashboard-stored credential |
+| `image.creds` | Dashboard-stored credential reference for a private prebuilt image |
+| `registryCredential` | Dashboard-stored credential reference for private base images used by `runtime: docker` |
 
 Example sketch (values illustrative):
 
@@ -64,7 +67,7 @@ services:
         value: 10000
 ```
 
-For `runtime: image`, set `image.url` and, if needed, `registryCredential` per **Registry Configuration** below.
+For `runtime: image`, set `image.url` and, if needed, `image.creds` per **Registry Configuration** below.
 
 ## Multi-Stage Builds
 
@@ -90,11 +93,12 @@ Treat anything sensitive as **runtime** or **BuildKit secret mount**, not as a b
 Private **base images** (for `runtime: docker`) or **prebuilt images** (`runtime: image`) need authentication:
 
 - Store credentials in the Render Dashboard under **Registry Credentials**.
-- In Blueprint, reference them with **`registryCredential.fromRegistryCreds.name`** (match the Dashboard name).
+- For `runtime: docker`, reference private base-image credentials with **`registryCredential.fromRegistryCreds.name`**.
+- For `runtime: image`, reference private prebuilt-image credentials with **`image.creds.fromRegistryCreds.name`**.
 
 Supports common registries (Docker Hub, GHCR, ECR, Google Artifact Registry, and others). Step-by-step per provider: `references/registry-setup.md`.
 
-**Prebuilt image services** do **not** auto-deploy when the tag moves in the registry; trigger a **manual redeploy** or use a **deploy hook** when you publish a new image.
+Prebuilt-image services do not automatically deploy when a mutable registry tag moves. After publishing a new image, trigger a manual deploy through the Dashboard or a supported API or deploy-hook flow. Prefer immutable tags or digests so each deploy identifies an explicit artifact; follow `references/deployments.md` for the complete trigger and verification workflow.
 
 ## Layer Caching
 
@@ -105,7 +109,7 @@ Supports common registries (Docker Hub, GHCR, ECR, Google Artifact Registry, and
 
 - Render builds **linux/amd64**. Avoid assumptions about other architectures in production images.
 - **Port binding** matches native services: bind HTTP to **`0.0.0.0:$PORT`** (Render sets `PORT`).
-- **Health checks** behave like non-Docker web services (`healthCheckPath`, etc.).
+- **Health checks** use the same platform behavior described in `references/deployments.md`.
 - **Secret files** from Render appear under **`/etc/secrets/`** — do not rely on repo-root secret paths inside the container unless you copy or mount them explicitly in the image.
 
 ## `.dockerignore` and Start Commands
@@ -120,9 +124,23 @@ Supports common registries (Docker Hub, GHCR, ECR, Google Artifact Registry, and
 | `references/dockerfile-patterns.md` | Multi-stage templates (Node, Python, Go, Ruby, Rust, static sites) |
 | `references/registry-setup.md` | Docker Hub, GHCR, ECR, Artifact Registry + Blueprint wiring |
 | `references/optimization-guide.md` | Layer order, `.dockerignore`, BuildKit cache mounts, debugging |
+| `references/deployments.md` | Deploy triggers, lifecycle, health checks, shutdown, and verification |
 
 ## Related Skills
 
 - **render-deploy** — Deploy flows, Blueprint vs Dashboard, operational steps
 - **render-blueprints** — Full `render.yaml` schema, wiring, and validation
 - **render-web-services** — Web service behavior, health checks, and HTTP edge cases
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

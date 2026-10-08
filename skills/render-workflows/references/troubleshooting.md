@@ -1,233 +1,222 @@
 # Troubleshooting
 
-Common issues and fixes when developing with Render Workflows, sourced from the SDK source code and official docs.
+Use this reference for common Render Workflows setup, registration, execution, and client failures. Check the current [Workflows documentation](https://render.com/docs/workflows) and installed SDK version before relying on an implementation detail.
 
-## Contents
+## CLI and Local Server
 
-- Task server issues
-- Task registration issues
-- Task execution issues
-- Client issues
-- Connection and networking
-- Local development gotchas
-- Limits reference
+### `render workflows` or a subcommand is unavailable
 
-## Task Server Issues
+Run `render --version` and upgrade the CLI. Different workflow features arrived in different versions; this skill uses 2.16.0 or later for scaffolding, local development, and CLI deployment.
 
-### Task server won't start
+On macOS with Homebrew:
 
-**Symptom:** `render workflows dev` fails or hangs.
+```bash
+brew upgrade render
+```
 
-| Cause | Fix |
-|-------|-----|
-| CLI version < 2.11.0 | Run `render --version` to check. Upgrade: `brew upgrade render` (macOS) or reinstall via the install script. |
-| Wrong start command | Python: `render workflows dev -- python workflows/main.py`. TypeScript: `render workflows dev -- npx tsx workflows/main.ts`. |
-| Missing `app.start()` (Python) | Add `if __name__ == "__main__": app.start()` at the bottom of your entry point. |
-| Port already in use | Use `--port` flag: `render workflows dev --port 8121 -- ...` |
+For other platforms, follow the current [CLI installation guide](https://render.com/docs/cli#installation).
 
-### `app.start()` fails with `ValueError` (Python)
+### Local task server does not start
 
-**Symptom:** `ValueError` about missing `RENDER_SDK_MODE` or `RENDER_SDK_SOCKET_PATH`.
+| Cause | Resolution |
+|---|---|
+| Start command is wrong | Run the same entrypoint used by the workflow service, such as `python main.py` or `npm start`. |
+| Python dependencies are in a virtual environment | Use its interpreter, such as `.venv/bin/python main.py`. |
+| Python entrypoint does not call `app.start()` | Add the call to the executed entrypoint. |
+| Port is occupied | Start with `--port <port>` and pass the same port to every local CLI or SDK call. |
+| Docker-based workflow | Use a native local entrypoint or test after deployment; Docker workflows do not currently support the local task server. |
 
-**Cause:** `app.start()` expects env vars that the Render CLI sets automatically. Running `python main.py` directly (without the CLI) triggers this.
+Do not run a Python workflow entrypoint directly when it expects Render runtime variables. Start it through:
 
-**Fix:** Always start via the CLI: `render workflows dev -- python workflows/main.py`. The CLI sets the required env vars.
+```bash
+render workflows dev -- python main.py
+```
 
-### Auto-start crashes with `process.exit(1)` (TypeScript)
+### Environment variables are missing locally
 
-**Symptom:** Process exits immediately with no useful error message.
+The CLI loads `.env` from its current directory. Run from the intended workflow root, or pass one or more explicit files:
 
-**Cause:** The SDK auto-starts the task server via `setImmediate` when `RENDER_SDK_SOCKET_PATH` is set. If `startTaskServer()` throws, the SDK calls `process.exit(1)` with only a `console.error`.
+```bash
+render workflows dev --env-file .env --env-file .env.local -- python main.py
+```
 
-**Fix:** Check that `RENDER_SDK_SOCKET_PATH` points to a valid, writable path. Use the Render CLI for local dev. Set `RENDER_SDK_AUTO_START=false` to disable auto-start and start manually if needed.
+Later files override earlier ones. Confirm that secrets are ignored by Git and do not print their values during diagnosis.
 
-## Task Registration Issues
+## SDK 1.x Migration Failures
 
-### "Task not found" in CLI
+### Python cannot import `render_sdk`
 
-**Symptom:** `render workflows tasks list --local` shows no tasks or is missing expected tasks.
+The current Python distribution and import module are named `render`:
 
-| Cause | Fix |
-|-------|-----|
-| Module not imported (Python) | Ensure your entry point imports all task files or uses `Workflows.from_workflows()`. |
-| Module not imported (TypeScript) | Add `import './your-task-file'` to your `index.ts` entry point. |
-| Server not running | Start the local task server first, then run `list --local` in a second terminal. |
-| Missing `--local` flag | Without `--local`, the CLI lists deployed (remote) tasks, not local ones. |
+```bash
+python -m pip install 'render>=1.0.1'
+python -c 'import render; print(render.__file__)'
+```
 
-### Late registration after auto-start (TypeScript)
-
-**Symptom:** Dynamically imported tasks are not available for execution; a warning appears in logs.
-
-**Cause:** The SDK auto-starts via `setImmediate` after synchronous module loading. Tasks registered after that (e.g., via dynamic `import()`) miss the registration window.
-
-**Fix:** Define all tasks at module scope using synchronous `import './module'` statements. Avoid dynamic imports for task files.
-
-### Duplicate task names
-
-**Symptom:** Python raises `ValueError("Task '{name}' already registered")`. TypeScript silently overwrites the previous task.
-
-**Cause:** Two tasks registered with the same `name`.
-
-**Fix:** Use unique names for every task. When using `Workflows.from_workflows()` in Python, a `ValueError` is raised if any imported apps share a task name.
-
-### Empty task name (TypeScript)
-
-**Symptom:** `Error: Task function must have a name or name must be provided`.
-
-**Fix:** Always pass `name` in the options object: `task({ name: "myTask" }, function myTask() { ... })`.
-
-## Task Execution Issues
-
-### Subtask hangs forever
-
-**Symptom:** A task that calls other tasks never completes.
-
-| Cause | Fix |
-|-------|-----|
-| Missing `await` | Subtask calls return a `TaskInstance` (Python) or `Promise` (TypeScript), not the result. You must `await` them. |
-| Missing `async` keyword | Python: chaining tasks must be declared `async def`. TypeScript: must use `async function`. |
-| Sequential instead of parallel | If you `await` each subtask individually, they run serially. Use `asyncio.gather()` (Python) or `Promise.all()` (TypeScript) for parallel execution. |
-
-### Calling subtask outside a task context (Python)
-
-**Symptom:** `RuntimeError` about running a subtask outside task execution context.
-
-**Cause:** Task functions that are decorated with `@app.task` can only trigger subtask runs when called from within another executing task. Calling them from regular code (e.g., a script or REPL) fails because the internal `_current_client` context is not set.
-
-**Fix:** To trigger tasks from outside a task, use the SDK client (`Render()` or `RenderAsync()`) with `start_task()` or `run_task()`. Subtask syntax is only for task-to-task chaining.
-
-### Mixed positional and keyword arguments (Python)
-
-**Symptom:** `ValueError` about not mixing positional and keyword arguments.
-
-**Cause:** The Python SDK does not allow calling a subtask with both `*args` and `**kwargs` simultaneously.
-
-**Fix:** Use either positional args or keyword args, not both: `await my_task(1, 2)` or `await my_task(a=1, b=2)`.
-
-### "Not JSON serializable" error
-
-**Symptom:** Task fails with a serialization error.
-
-| Cause | Fix |
-|-------|-----|
-| Non-serializable arguments | Task args must be JSON-serializable: dicts/objects, lists/arrays, strings, numbers, booleans, None/null. No class instances, functions, dates, sets, bytes, or `BigInt`. |
-| Non-serializable return value | Same rule applies to return values. Convert complex objects to dicts/plain objects before returning. |
-| Non-serializable default values (Python) | Default parameter values that aren't JSON-serializable are silently dropped. The API metadata won't reflect them. Use only JSON-serializable defaults. |
-
-### Task run fails silently
-
-**Symptom:** Task run shows `failed` status with no useful error.
-
-| Cause | Fix |
-|-------|-----|
-| Unhandled exception | Add logging inside your task. Wrap risky code in try/except (Python) or try/catch (TypeScript). |
-| No retry config | Add retry configuration so transient failures are retried automatically. |
-| Timeout exceeded | Default timeout is 2 hours. Set `timeout_seconds` (Python) or `timeoutSeconds` (TypeScript) per task if you need more. Max: 24 hours. |
-| All retries exhausted | After `max_retries + 1` total attempts, the run is marked failed. Inspect `TaskRunDetails.attempts` for per-attempt error details. |
-
-### Timeout value rejected by API
-
-**Symptom:** Task registration or run fails with a validation error.
-
-**Cause:** The SDK does not validate `timeout_seconds`/`timeoutSeconds` client-side. Out-of-range values (outside 30–86,400) are sent to the API, which rejects them.
-
-**Fix:** Keep timeout values between 30 seconds and 86,400 seconds (24 hours).
-
-## Client Issues
-
-### `Render()` with `await` fails (Python)
-
-**Symptom:** `TypeError` or unexpected behavior when using `await` with `Render()`.
-
-**Fix:** `Render()` is the synchronous client. Use `RenderAsync()` for async contexts:
+Update imports such as:
 
 ```python
-# Synchronous (Flask, Django, scripts)
-from render_sdk import Render
-render = Render()
-result = render.workflows.run_task("my-workflow/task", [42])
+from render import Render, Retry, TaskContext, Workflows
+```
 
-# Asynchronous (FastAPI, async scripts)
-from render_sdk import RenderAsync
+### Task registration rejects the function signature
+
+Every task must accept `TaskContext` as its first positional parameter, including tasks that do not use it:
+
+```python
+@app.task
+def ping(_ctx: TaskContext) -> str:
+    return "pong"
+```
+
+```typescript
+task({ name: "ping" }, (_ctx: TaskContext) => "pong");
+```
+
+The context is supplied by Render and is not included in CLI, SDK, or API task input.
+
+### A registered task is “not callable”
+
+SDK 1.x returns a task definition, not a callable wrapper.
+
+- From another task, use `await ctx.run(task_definition, ...args)`.
+- In a unit test, call `task_definition.func(fake_context, ...args)` explicitly.
+- From an application or script, use `Render().workflows.start_task()` or `run_task()` and the task slug.
+
+Do not restore direct calls as a workaround; direct calls would bypass distributed execution and task-run observability.
+
+## Task Registration
+
+### Local task list is empty or missing tasks
+
+| Cause | Resolution |
+|---|---|
+| Missing `--local` | Use `render workflows tasks list --local`. |
+| Server is not running | Start `render workflows dev` in another terminal first. |
+| Python module is not incorporated | Import its `Workflows` object and combine apps with `Workflows.from_workflows(...)`. |
+| TypeScript module is not imported | Add a synchronous module import to the entrypoint. |
+| TypeScript task registered after auto-start | Define and import tasks synchronously at module scope; avoid dynamic imports for registration. |
+| Duplicate task name | Give every task a unique registered name. |
+
+TypeScript's registry can replace a previous task with the same name, so detect duplicates during review rather than relying on a runtime error.
+
+### TypeScript exits during auto-start
+
+The TypeScript SDK auto-starts task registration when `RENDER_SDK_SOCKET_PATH` is present. Use the Render CLI locally. Only set `RENDER_SDK_AUTO_START=false` when deliberately taking manual control of startup.
+
+## Task Execution
+
+### Chained run hangs or never starts
+
+Check that:
+
+- The parent task is `async`.
+- The child is registered in the same workflow service.
+- The call is `await ctx.run(child, ...)`.
+- Parallel calls are collected with `asyncio.gather`, `asyncio.TaskGroup`, `Promise.all`, or a deliberate equivalent.
+
+Awaiting each independent child one at a time makes the chain serial rather than parallel.
+
+### Python rejects mixed task arguments
+
+`ctx.run` accepts positional arguments or named arguments, not both in the same call:
+
+```python
+await ctx.run(task, first, second)
+await ctx.run(task, left=first, right=second)
+```
+
+The same distinction applies when triggering a Python task through the SDK: send a list for positional input or a dictionary for named input.
+
+### Input or result is not JSON-serializable
+
+Convert values to JSON-compatible objects before passing or returning them. In particular, encode dates, byte strings, sets, class instances, and TypeScript `BigInt` values explicitly.
+
+For current payload-size limits, consult [Limits and Pricing for Render Workflows](https://render.com/docs/workflows-limits).
+
+### Retried task duplicates a side effect
+
+Retries rerun task logic. Use idempotency keys, upserts, transactional guards, or downstream deduplication for writes, payments, messages, and other mutations. Do not enable retries on unsafe operations without a repeat-safety strategy.
+
+### Timeout or compute plan is rejected
+
+Verify the task option name first:
+
+- Python task: `timeout_seconds=` and `plan=`
+- Python workflow default: `default_timeout=` and `default_plan=`
+- TypeScript task: `timeoutSeconds` and `plan`
+
+Then resolve current timeout bounds and compute-plan IDs from [Limits and Pricing for Render Workflows](https://render.com/docs/workflows-limits). Do not substitute a remembered legacy plan name.
+
+## API Client
+
+### `await Render()` fails in Python
+
+`Render` is synchronous. Use `RenderAsync` in an async context:
+
+```python
+from render import RenderAsync
+
 render = RenderAsync()
 result = await render.workflows.run_task("my-workflow/task", [42])
 ```
 
-### "Invalid API key" or "Unauthorized"
+Use `Render` without `await` in synchronous code.
 
-| Cause | Fix |
-|-------|-----|
-| Missing `RENDER_API_KEY` | Set the environment variable: `export RENDER_API_KEY=rnd_...` |
-| Wrong key | Generate a new key at `https://dashboard.render.com/u/*/settings#api-keys` |
-| Key doesn't match workspace | Ensure the key belongs to the workspace that owns the workflow |
-| No key and no token passed | Both `Render()` and `RenderAsync()` raise `ValueError` if no token is available |
+### Unauthorized or API key missing
 
-### Argument too large
+The SDK uses `RENDER_API_KEY` unless a token is passed to the constructor. Confirm that the key belongs to a user with access to the workflow's workspace. Never log or commit the key.
 
-**Symptom:** Request rejected with a size error.
+### Client wait was aborted but the run continues
 
-**Fix:** Task arguments cannot exceed 4 MB total per invocation. Reduce payload size or pass references (URLs, IDs) instead of raw data.
+Canceling a TypeScript `AbortSignal`, closing an SSE stream, or interrupting a local wait does not cancel the remote run. Call the explicit cancellation method with the root task run ID:
 
-### SSE stream ends without event
+```typescript
+await render.workflows.cancelTaskRun(taskRunId);
+```
 
-**Symptom:** `RenderError("Task run completed with no event")` (Python) or unhandled stream error (TypeScript).
+Canceling a root run cancels its active chained runs. A child run is not an independent cancellation target.
 
-**Cause:** The SSE connection closed before a terminal event (`completed`, `failed`, `canceled`) was received.
+### Run listing shape is unexpected
 
-**Fix:** This is typically a transient network issue. The SDK retries internally (up to 5 attempts with exponential backoff). If it persists, check network connectivity and try again. You can also poll with `get_task_run()` as a fallback.
+Current list methods return cursor-bearing wrappers:
 
-### AbortSignal does not cancel remote task (TypeScript)
+- Python: access `.task_run` on each item.
+- TypeScript: access `.taskRun` on each item.
 
-**Symptom:** After aborting, the task run continues executing on Render.
+Use the returned cursor for pagination instead of assuming one call returns all runs.
 
-**Cause:** `AbortSignal` only cancels the local SDK wait (the HTTP request or SSE stream). The remote task run keeps running.
+### Rate limiting or queued runs
 
-**Fix:** To actually cancel a running task, explicitly call `render.workflows.cancelTaskRun(taskRunId)` after aborting.
+API-triggered runs and chained runs have different limits and queueing behavior. Consult [Limits and Pricing for Render Workflows](https://render.com/docs/workflows-limits) for current API rate, compute, and queueing rules. Back off on rate-limit responses; do not assume those requests were queued.
 
-### Rate limiting (429)
+## Deployment
 
-**Symptom:** `RateLimitError` (Python) or `ClientError` with 429 status (TypeScript).
+### `render workflows create` fails
 
-**Fix:** Reduce request frequency. The SDK retries rate-limited requests internally for UDS calls (up to 15 attempts), but client-to-API rate limits require you to back off.
+Confirm the active workspace, backing Git remote, repository access, runtime, root directory, and exact build/run commands. For non-interactive creation, required fields must be passed as flags.
 
-## Connection & Networking
+If `--repo .` cannot resolve the repository, inspect the local Git remote and pass the supported Git provider URL explicitly.
 
-### UDS retries exhausted
+### Tasks do not appear after deployment
 
-**Symptom:** Error after approximately 2.5 minutes of retries during task execution.
+Check the workflow's build and release logs. Confirm that the deployed start command executes the same entrypoint verified locally and that all task modules are imported during registration.
 
-**Cause:** The internal Unix Domain Socket client retries transient errors (5xx, timeouts, rate limits) up to 15 times with exponential backoff (250ms initial, 2x factor, 16s cap). After 15 failures, the last error is thrown.
+To release a new version explicitly and wait for the outcome:
 
-**Fix:** This usually indicates the task server is unhealthy or overwhelmed. Check server logs, restart the task server, and ensure the socket path is valid.
+```bash
+render workflows versions release <workflow-id> --wait
+```
 
-### Runs queued at concurrency limit
+### Blueprint sync fails or the workflow is missing from a preview
 
-**Symptom:** New task runs stay in `pending` status for a long time.
+Workflows are valid Blueprint services (`type: workflow`). Common failures:
 
-**Cause:** Your workspace has hit its concurrent run limit. New runs are queued (not rejected) until another run completes.
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Schema / validate error on `plan` | Service-level `plan` is not allowed on workflows | Remove `plan`. Set compute on the task in code. |
+| Workflow deploys but behaves unexpectedly with `runtime: docker` | Workflow runtimes are `python` and `node` only. `render blueprints validate` currently accepts `runtime: docker` on a workflow even though the published schema rejects it, so a passing validate is not proof the runtime is supported | Use `runtime: python` or `runtime: node`. Validate against `https://render.com/schema/render.yaml.json` rather than trusting the CLI result alone |
+| Preview stack has no workflow | Preview environments skip workflows | Expected. Other services still replicate. Trigger tasks against the non-preview workflow or deploy the workflow separately. |
+| Blueprint rejected for duplicate name | A Blueprint-managed workflow with that `name` already exists in the workspace | Rename the service, or adopt the existing resource instead of creating a second one |
 
-**Fix:** Wait for in-progress runs to finish, cancel unnecessary runs, or purchase additional concurrency in your workspace settings. Creating multiple workflow services does not increase the limit.
-
-## Local Development Gotchas
-
-| Gotcha | Details |
-|--------|---------|
-| Local IDs don't match production | Task and run IDs in local dev are random UUIDs. They won't match deployed identifiers. |
-| Data is in-memory only | Logs and results are lost when the local server shuts down. |
-| Memory grows with many runs | Restart the local server periodically during heavy testing. |
-| Only task endpoints are simulated | Other Render API endpoints are not available on the local server. |
-| Cross-workflow calls not tracked | Calls between workflows via the SDK client are not shown as chained runs in the Dashboard. |
-
-## Limits Reference
-
-| Limit | Value |
-|-------|-------|
-| Max task definitions per workflow | 500 |
-| Max argument size per run | 4 MB |
-| Concurrent runs (Hobby) | 20 base, up to 200 |
-| Concurrent runs (Professional) | 50 base, up to 200 |
-| Concurrent runs (Org/Enterprise) | 100 base, up to 300 |
-| Run timeout range | 30 seconds – 24 hours |
-| Default run timeout | 2 hours |
-| UDS internal retries | 15 attempts over ~2.5 minutes |
-| SSE wait retries | 5 attempts with exponential backoff |
+Do not copy the stale Workflows FAQ bullet that says Blueprints cannot manage workflows. Confirm against the [changelog](https://render.com/changelog/added-blueprint-support-for-render-workflows) and `https://render.com/schema/render.yaml.json`.

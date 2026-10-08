@@ -1,20 +1,6 @@
 # Render CLI Command Cheatsheet
 
-## Authentication
-
-```bash
-# Interactive login (opens browser)
-render login
-
-# CI/CD authentication (no login needed)
-export RENDER_API_KEY=rnd_...
-
-# Set active workspace
-render workspace set
-
-# List workspaces
-render workspaces -o json
-```
+For authentication, workspace selection, exact command discovery, and non-interactive output guidance, first read [render-access.md](render-access.md).
 
 ## Services
 
@@ -116,21 +102,6 @@ render skills update
 
 # List installed skills
 render skills list
-```
-
-## Output Formats
-
-| Flag | Format | Use case |
-|------|--------|----------|
-| `-o json` | JSON | Scripting, piping to `jq` |
-| `-o yaml` | YAML | Config generation |
-| `-o text` | Plain text | Human-readable in CI logs |
-| `-o interactive` | Menu-based | Default in TTY |
-
-Set globally:
-
-```bash
-export RENDER_OUTPUT=json
 ```
 
 ## Non-Interactive Patterns

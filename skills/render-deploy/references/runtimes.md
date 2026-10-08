@@ -6,8 +6,7 @@ Complete guide to available runtimes on Render, including versions, configuratio
 
 ### Node.js (`runtime: node`)
 
-**Supported Versions:** 14, 16, 18, 20, 21
-**Default Version:** 20
+**Current Default Version:** 24.14.1
 
 **Version Specification:**
 
@@ -15,7 +14,7 @@ Specify Node version in `package.json`:
 ```json
 {
   "engines": {
-    "node": "20.x"
+    "node": "24.14.1"
   }
 }
 ```
@@ -56,24 +55,31 @@ buildCommand: npm ci && npm run build
 startCommand: npm start
 ```
 
+For NextAuth.js v4, `NEXTAUTH_URL` must be the application's canonical public URL. Render injects the service's `onrender.com` hostname as `RENDER_EXTERNAL_HOSTNAME`, but Blueprint environment-variable values do not interpolate other environment variables. A reusable service can derive the default at startup while allowing an explicitly configured custom-domain URL to take precedence:
+
+```yaml
+startCommand: NEXTAUTH_URL="${NEXTAUTH_URL:-https://$RENDER_EXTERNAL_HOSTNAME}" npm start
+```
+
+Set `NEXTAUTH_URL` explicitly when a custom domain should be canonical. Do not hardcode a guessed `onrender.com` hostname in a reusable Blueprint.
+
 ---
 
 ### Python (`runtime: python`)
 
-**Supported Versions:** 3.8, 3.9, 3.10, 3.11, 3.12
-**Default Version:** 3.11
+**Current Default Version:** 3.14.3
+**Minimum Supported Version:** 3.7.3
 
 **Version Specification:**
 
-Option 1 - `runtime.txt`:
+Option 1 - `PYTHON_VERSION` environment variable (must be fully qualified):
 ```
-python-3.11.5
+PYTHON_VERSION=3.14.3
 ```
 
-Option 2 - `Pipfile`:
-```toml
-[requires]
-python_version = "3.11"
+Option 2 - `.python-version`:
+```
+3.14.3
 ```
 
 **Package Managers:**
@@ -116,17 +122,11 @@ startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
 
 ### Go (`runtime: go`)
 
-**Supported Versions:** 1.20, 1.21, 1.22, 1.23
-**Default Version:** Latest stable
+**Current Default Version:** Latest stable Go 1.x
 
-**Version Specification:**
+Render automatically updates its native Go runtime to the latest stable Go 1.x release, usually within 24 hours of a new release. A service begins using the updated version with its next deploy.
 
-Specify in `go.mod`:
-```go
-module myapp
-
-go 1.22
-```
+Native Go services cannot pin a Go runtime version with `go.mod` or another setting. Use `runtime: docker` if the service requires a specific Go version.
 
 **Build System:** Uses Go modules
 
@@ -164,19 +164,19 @@ startCommand: ./bin/app
 
 ### Ruby (`runtime: ruby`)
 
-**Supported Versions:** 3.0, 3.1, 3.2, 3.3
-**Default Version:** 3.3
+**Current Default Version:** 3.4.4
+**Minimum Supported Version:** 3.1.0
 
 **Version Specification:**
 
 Option 1 - `.ruby-version`:
 ```
-3.3.0
+3.4.4
 ```
 
 Option 2 - `Gemfile`:
 ```ruby
-ruby '3.3.0'
+ruby '3.4.4'
 ```
 
 **Package Manager:** Bundler (uses `Gemfile` and `Gemfile.lock`)
@@ -213,8 +213,7 @@ startCommand: bundle exec puma -C config/puma.rb
 
 ### Rust (`runtime: rust`)
 
-**Supported Versions:** Latest stable
-**Default Version:** Latest stable
+**Default Version:** Latest stable Rust toolchain
 
 **Build System:** Cargo
 
@@ -248,8 +247,7 @@ startCommand: ./target/release/myapp
 
 ### Elixir (`runtime: elixir`)
 
-**Supported Versions:** Latest stable
-**Default Version:** Latest stable
+**Current Defaults:** Elixir 1.18.4 and Erlang/OTP 28.0.2
 
 **Build System:** Mix
 
@@ -334,15 +332,16 @@ CMD ["node", "dist/main.js"]
 Deploy pre-built Docker images from a container registry.
 
 **Additional Configuration:**
-- `image`: Full image URL with tag or digest
-- `registryCredential`: Credentials for private registries
+- `image.url`: Full image URL with tag or digest
+- `image.creds.fromRegistryCreds.name`: Dashboard-stored registry credential for private images
 
 **Example with Public Image:**
 ```yaml
 type: web
 name: prebuilt-app
 runtime: image
-image: ghcr.io/myorg/myapp:v1.2.3
+image:
+  url: ghcr.io/myorg/myapp:v1.2.3
 ```
 
 **Example with Private Registry:**
@@ -350,11 +349,11 @@ image: ghcr.io/myorg/myapp:v1.2.3
 type: web
 name: private-app
 runtime: image
-image: myregistry.com/myapp:latest
-registryCredential:
-  username: my-username
-  password:
-    sync: false  # User provides in Dashboard
+image:
+  url: registry.example.com/myapp:latest  # Replace with your registry host
+  creds:
+    fromRegistryCreds:
+      name: my-registry-credential
 ```
 
 **Use Cases:**

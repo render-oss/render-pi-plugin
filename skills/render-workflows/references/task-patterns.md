@@ -1,57 +1,65 @@
 # Task Patterns
 
-Common workflow patterns for both Python and TypeScript.
+These examples use the Render SDK 1.x task model. Every task accepts `TaskContext` first, and chained runs go through `ctx.run`.
 
-## Contents
+For Python snippets, assume:
 
-- Fan-out / fan-in
-- ETL pipeline
-- Retry-heavy tasks
-- Error handling in tasks
-- Integration patterns (cron triggers, cross-workflow calls)
+```python
+from render import Retry, TaskContext, Workflows
 
-## Fan-Out / Fan-In
+app = Workflows()
+```
 
-Process a batch of items in parallel using subtasks, then aggregate results.
+For TypeScript snippets, assume:
 
-**Python:**
+```typescript
+import { task, type TaskContext } from "@renderinc/sdk/workflows";
+```
+
+## Fan-Out and Fan-In
+
+Use concurrent chaining when independent work benefits from separate compute and retry boundaries.
+
+Python:
+
 ```python
 import asyncio
 
 @app.task
-async def process_batch(image_urls: list[str]) -> dict:
+def process_image(_ctx: TaskContext, url: str) -> dict:
+    return {"url": url, "success": True}
+
+@app.task
+async def process_batch(ctx: TaskContext, image_urls: list[str]) -> dict:
     results = await asyncio.gather(
-        *[process_image(url) for url in image_urls]
+        *(ctx.run(process_image, url) for url in image_urls)
     )
-    successful = sum(1 for r in results if r["success"])
+    successful = sum(1 for result in results if result["success"])
     return {
         "total": len(image_urls),
         "processed": successful,
         "failed": len(image_urls) - successful,
         "results": list(results),
     }
-
-@app.task
-def process_image(url: str) -> dict:
-    return {"url": url, "success": True}
 ```
 
-**TypeScript:**
+TypeScript:
+
 ```typescript
 const processImage = task(
   { name: "processImage" },
-  function processImage(url: string): { url: string; success: boolean } {
+  function processImage(_ctx: TaskContext, url: string) {
     return { url, success: true };
   },
 );
 
 task(
   { name: "processBatch" },
-  async function processBatch(imageUrls: string[]): Promise<object> {
+  async function processBatch(ctx: TaskContext, imageUrls: string[]) {
     const results = await Promise.all(
-      imageUrls.map(url => processImage(url)),
+      imageUrls.map((url) => ctx.run(processImage, url)),
     );
-    const successful = results.filter(r => r.success).length;
+    const successful = results.filter((result) => result.success).length;
     return {
       total: imageUrls.length,
       processed: successful,
@@ -62,201 +70,186 @@ task(
 );
 ```
 
-## ETL Pipeline
+Avoid unbounded fan-out when the input can be arbitrarily large. Batch inputs or add application-level concurrency control when downstream systems, rate limits, or cost require it.
 
-Extract, transform, load pattern with chained subtasks.
+## Sequential Pipeline
 
-**Python:**
+Use sequential chaining when each stage depends on the prior stage's result.
+
+Python:
+
 ```python
 @app.task
-async def etl_pipeline(source: str, destination: str) -> dict:
-    raw_data = await extract(source)
-    transformed = await transform(raw_data)
-    result = await load(destination, transformed)
-    return result
+def extract(_ctx: TaskContext, source: str) -> dict:
+    return {"source": source, "records": []}
 
 @app.task
-def extract(source: str) -> dict:
-    return {"records": []}
+def transform(_ctx: TaskContext, data: dict) -> dict:
+    return {"records": data["records"]}
 
 @app.task
-def transform(data: dict) -> dict:
-    return {"records": []}
+def load(_ctx: TaskContext, destination: str, data: dict) -> dict:
+    return {"destination": destination, "loaded": len(data["records"])}
 
 @app.task
-def load(destination: str, data: dict) -> dict:
-    return {"loaded": len(data["records"])}
+async def etl_pipeline(
+    ctx: TaskContext,
+    source: str,
+    destination: str,
+) -> dict:
+    raw_data = await ctx.run(extract, source)
+    transformed = await ctx.run(transform, raw_data)
+    return await ctx.run(load, destination, transformed)
 ```
 
-**TypeScript:**
+TypeScript:
+
 ```typescript
 const extract = task(
   { name: "extract" },
-  function extract(source: string): object {
-    return { records: [] };
-  },
+  (_ctx: TaskContext, source: string) => ({ source, records: [] as object[] }),
 );
 
 const transform = task(
   { name: "transform" },
-  function transform(data: object): object {
-    return { records: [] };
-  },
+  (_ctx: TaskContext, data: { records: object[] }) => ({ records: data.records }),
 );
 
 const load = task(
   { name: "load" },
-  function load(destination: string, data: object): object {
-    return { loaded: 0 };
-  },
+  (_ctx: TaskContext, destination: string, data: { records: object[] }) => ({
+    destination,
+    loaded: data.records.length,
+  }),
 );
 
 task(
   { name: "etlPipeline" },
-  async function etlPipeline(source: string, destination: string): Promise<object> {
-    const rawData = await extract(source);
-    const transformed = await transform(rawData);
-    return await load(destination, transformed);
+  async function etlPipeline(
+    ctx: TaskContext,
+    source: string,
+    destination: string,
+  ) {
+    const rawData = await ctx.run(extract, source);
+    const transformed = await ctx.run(transform, rawData);
+    return ctx.run(load, destination, transformed);
   },
 );
 ```
 
-## Retry-Heavy Tasks
+## Retries and Idempotency
 
-Tasks with aggressive retry for unreliable external APIs.
+Tasks retry automatically by default. Before running tasks that send emails, charge payments, or modify external state, use idempotency keys or another deduplication mechanism to prevent duplicate effects.
 
-**Python:**
+Python:
+
 ```python
-from render_sdk import Retry
-
-@app.task(retry=Retry(max_retries=5, wait_duration_ms=2000, backoff_scaling=2.0))
-def call_external_api(endpoint: str, payload: dict) -> dict:
-    import urllib.request
-    import json
-
-    req = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
+@app.task(
+    retry=Retry(
+        max_retries=5,
+        wait_duration_ms=2000,
+        backoff_scaling=2.0,
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())
+)
+def fetch_document(_ctx: TaskContext, url: str) -> str:
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return response.read().decode()
 ```
 
-**TypeScript:**
+TypeScript:
+
 ```typescript
 task(
   {
-    name: "callExternalApi",
-    retry: { maxRetries: 5, waitDurationMs: 2000, backoffScaling: 2.0 },
-    timeoutSeconds: 60,
+    name: "fetchDocument",
+    retry: {
+      maxRetries: 5,
+      waitDurationMs: 2000,
+      backoffScaling: 2,
+    },
   },
-  async function callExternalApi(endpoint: string, payload: object): Promise<object> {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    return resp.json();
+  async function fetchDocument(_ctx: TaskContext, url: string): Promise<string> {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.text();
   },
 );
 ```
 
-## Error Handling in Tasks
+Do not retry every error indiscriminately in task code. Let the configured task policy handle run retries, and distinguish permanent validation failures from transient upstream failures when the task itself implements request-level retry logic. For common execution issues and fixes, see [troubleshooting.md](troubleshooting.md).
 
-Tasks that raise exceptions are retried automatically according to their retry config. Use this intentionally. For common execution issues and fixes, see [troubleshooting.md](troubleshooting.md).
+## Testing Task Logic In Process
 
-**Python:**
+SDK 1.x returns task definitions rather than callable task wrappers. Invoke `.func` with a test context for unit tests:
+
+Python:
+
 ```python
-@app.task(retry=Retry(max_retries=3, wait_duration_ms=1000))
-def resilient_task(data: dict) -> dict:
-    result = process(data)
-    if not result["valid"]:
-        raise ValueError("Invalid result, retrying...")
-    return result
+class NoSubtasks:
+    async def run(self, task, *args, **kwargs):
+        raise AssertionError("unexpected chained run")
+
+assert process_image.func(NoSubtasks(), "https://example.com/a.png")["success"]
 ```
 
-**TypeScript:**
+TypeScript:
+
 ```typescript
-task(
-  {
-    name: "resilientTask",
-    retry: { maxRetries: 3, waitDurationMs: 1000 },
+const noSubtasks = {
+  metadata: {},
+  run: async () => {
+    throw new Error("unexpected chained run");
   },
-  function resilientTask(data: object): object {
-    const result = process(data);
-    if (!result.valid) {
-      throw new Error("Invalid result, retrying...");
-    }
-    return result;
-  },
-);
+};
+
+const result = processImage.func(noSubtasks, "https://example.com/a.png");
 ```
 
----
+For orchestration tests, supply a fake `TaskContext.run` that records task definitions and returns controlled results.
 
-## Integration Patterns
+## Scheduled Trigger
 
-Patterns for triggering workflow tasks from outside a workflow context.
+Render Workflows does not currently provide native scheduling. A Render cron job can trigger a deployed task with the SDK client.
 
-## Cron-Triggered Workflows
+Python sync client:
 
-Render Workflows do not have built-in scheduling. Use a Render cron job to trigger tasks on a schedule.
-
-**Python cron job (synchronous)** (`cron_trigger.py`):
 ```python
-from render_sdk import Render
+from render import Render
 
-def main():
+def main() -> None:
     render = Render()
     result = render.workflows.run_task("my-workflow/daily-cleanup", [])
-    print(f"Cleanup completed: {result.status}")
+    print(result.status)
 
 if __name__ == "__main__":
     main()
 ```
 
-**Python cron job (asynchronous)** (`cron_trigger.py`):
-```python
-import asyncio
-from render_sdk import RenderAsync
+TypeScript:
 
-async def main():
-    render = RenderAsync()
-    started = await render.workflows.start_task("my-workflow/daily-cleanup", [])
-    finished = await started
-    print(f"Cleanup completed: {finished.status}")
-
-asyncio.run(main())
-```
-
-**TypeScript cron job** (`cron-trigger.ts`):
 ```typescript
 import { Render } from "@renderinc/sdk";
 
 const render = new Render();
-
-async function main() {
-  const result = await render.workflows.runTask("my-workflow/daily-cleanup", []);
-  console.log("Cleanup completed:", result.status);
-}
-
-main();
+const result = await render.workflows.runTask("my-workflow/daily-cleanup", []);
+console.log(result.status);
 ```
 
-Set up the cron job in the Render Dashboard or via MCP with the desired schedule.
+Store `RENDER_API_KEY` as a secret on the triggering service.
 
-## Cross-Workflow Calls
+## Cross-Workflow Call
 
-A task in one workflow can trigger tasks in a **different** workflow using the SDK client (not subtask syntax):
+`ctx.run` only chains tasks in the same workflow service. To call a different workflow, use the API client. This creates an independent run rather than a parent-child relationship in the workflow graph.
 
-**Python:**
+Python:
+
 ```python
-from render_sdk import RenderAsync
+from render import RenderAsync
 
 @app.task
-async def orchestrate(data: dict) -> dict:
+async def orchestrate(_ctx: TaskContext, data: dict) -> object:
     render = RenderAsync()
     result = await render.workflows.run_task(
         "other-workflow/process",
@@ -265,13 +258,14 @@ async def orchestrate(data: dict) -> dict:
     return result.results
 ```
 
-**TypeScript:**
+TypeScript:
+
 ```typescript
 import { Render } from "@renderinc/sdk";
 
 task(
   { name: "orchestrate" },
-  async function orchestrate(data: object): Promise<unknown> {
+  async function orchestrate(_ctx: TaskContext, data: object): Promise<unknown> {
     const render = new Render();
     const result = await render.workflows.runTask(
       "other-workflow/process",
@@ -282,4 +276,4 @@ task(
 );
 ```
 
-> **Note:** Cross-workflow calls are not tracked as subtask relationships in the Dashboard.
+Cross-workflow calls require an API key and are subject to Render API behavior. Prefer same-workflow chaining when the tasks form one logical execution graph.

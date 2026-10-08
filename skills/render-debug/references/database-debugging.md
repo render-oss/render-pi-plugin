@@ -63,13 +63,7 @@ query_render_postgres(
 )
 ```
 
-**Connection limits by plan:**
-| Plan | Max Connections |
-|------|----------------|
-| Free | 97 |
-| Basic | 97 |
-| Standard | 120-500 |
-| Pro | 500+ |
+Connection limits vary by Postgres compute plan. Fetch the current plan table and limits using [compute-plans.md](compute-plans.md), then compare them with the database's live `max_connections` value.
 
 ### Fix Connection Issues
 
@@ -77,7 +71,7 @@ query_render_postgres(
 1. Implement connection pooling in your app
 2. Reduce connection timeout
 3. Close connections properly
-4. Upgrade database plan
+4. Upgrade the database compute plan
 
 **Node.js connection pooling:**
 ```javascript

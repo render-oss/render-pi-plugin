@@ -1,6 +1,6 @@
 # Cross-Service Wiring Patterns
 
-Complete examples for wiring services together in `render.yaml` via `envVars`.
+Read [environment-variables.md](environment-variables.md) first for current syntax discovery, secret handling, precedence, and mutation safety. When wiring an internal service address or discovery hostname, also read [private-networking.md](private-networking.md). This reference retains cross-resource wiring examples for `render.yaml`.
 
 ---
 
@@ -21,6 +21,7 @@ Available properties:
 | Property | Value |
 |----------|-------|
 | `connectionString` | Full `postgres://` URL (most common) |
+| `connectionPoolString` | Managed PgBouncer URL when connection pooling is enabled |
 | `host` | Database hostname |
 | `port` | Database port |
 | `user` | Database user |
@@ -51,7 +52,6 @@ Available properties:
 | `connectionString` | Full `redis://` URL |
 | `host` | Internal hostname |
 | `port` | Port number |
-| `hostport` | `host:port` combined |
 
 ---
 
@@ -88,6 +88,7 @@ Available properties for `pserv` and `web`:
 | Property | Value |
 |----------|-------|
 | `host` | Internal hostname |
+| `port` | Listening port |
 | `hostport` | `host:port` combined |
 
 Use `envVarKey` to copy a specific environment variable value from the other service.
@@ -104,34 +105,6 @@ envVars:
 ```
 
 This adds all variables from the named group to the service. The group must exist in the workspace or be defined in `envVarGroups`.
-
----
-
-## generateValue
-
-Generate a random base64-encoded 256-bit secret:
-
-```yaml
-envVars:
-  - key: APP_SECRET
-    generateValue: true
-```
-
-The value is generated once on initial Blueprint creation and persists across syncs.
-
----
-
-## sync: false
-
-Prompt the user to provide a value in the Dashboard:
-
-```yaml
-envVars:
-  - key: STRIPE_API_KEY
-    sync: false
-```
-
-Use for secrets that should never appear in the Blueprint file.
 
 ---
 
@@ -179,13 +152,11 @@ services:
     name: cache
     plan: starter
     maxmemoryPolicy: allkeys-lru
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: everywhere
+    ipAllowList: [] # Internal access only
 
 databases:
   - name: db
-    plan: starter
+    plan: basic-256mb
 
 envVarGroups:
   - name: shared-config
@@ -198,8 +169,4 @@ envVarGroups:
 
 ## Edge Cases
 
-- **sync: false only prompts on initial Blueprint setup.** On subsequent syncs, existing `sync: false` values are preserved. Adding a new `sync: false` var to an existing Blueprint does not prompt.
-- **sync: false is excluded from preview environments.** Users must set these values manually for each preview.
-- **sync: false is invalid in envVarGroups.** It is silently ignored if used in a group definition.
 - **fromService/fromDatabase can reference services outside the Blueprint** but the referenced service must already exist in the workspace.
-- **generateValue** generates once on initial create. It does not regenerate on subsequent Blueprint syncs.

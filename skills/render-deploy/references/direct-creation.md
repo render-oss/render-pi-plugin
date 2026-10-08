@@ -2,6 +2,8 @@
 
 Use this reference for MCP direct-creation examples and follow-on configuration.
 
+The plan values below are examples, not a current plan catalog. Before creating a resource, use [compute-plans.md](compute-plans.md) to select an appropriate plan, then inspect the active MCP tool's schema and pass a value it accepts. Some MCP versions accept legacy plan names but not the corresponding current Plan ID.
+
 ## Direct Creation Workflow
 
 ### Step 1: Analyze Codebase
@@ -19,7 +21,7 @@ create_web_service(
   branch: "main",  # optional, defaults to repo default branch
   buildCommand: "npm ci",
   startCommand: "npm start",
-  plan: "free",  # free, starter, standard, pro, pro_max, pro_plus, pro_ultra
+  plan: "free",
   region: "oregon",  # oregon, frankfurt, singapore, ohio, virginia
   envVars: [
     {"key": "NODE_ENV", "value": "production"}
@@ -50,7 +52,7 @@ create_cron_job(
   schedule: "0 0 * * *",  # Daily at midnight (cron syntax)
   buildCommand: "npm ci",
   startCommand: "node scripts/cleanup.js",
-  plan: "free"
+  plan: "starter"
 )
 ```
 
@@ -58,16 +60,16 @@ create_cron_job(
 ```
 create_postgres(
   name: "myapp-db",
-  plan: "free",  # free, basic_256mb, basic_1gb, basic_4gb, pro_4gb, etc.
+  plan: "free",
   region: "oregon"
 )
 ```
 
-**Create a Key-Value Store (Redis):**
+**Create a Key Value instance:**
 ```
 create_key_value(
   name: "myapp-cache",
-  plan: "free",  # free, starter, standard, pro, pro_plus
+  plan: "free",
   region: "oregon",
   maxmemoryPolicy: "allkeys_lru"  # eviction policy
 )
@@ -93,6 +95,8 @@ update_environment_variables(
 ### Step 4: Verify Deployment
 
 Services with `autoDeploy: "yes"` (default) will deploy automatically when created.
+
+Follow [deployments.md](deployments.md) to identify the resulting deploy, monitor it to a terminal state, and verify the workload. The creation response alone is not deployment success.
 
 **Check deployment status:**
 ```

@@ -1,6 +1,6 @@
 # Key Value Connection Examples
 
-All examples use the internal URL via the `REDIS_URL` environment variable. Wire `REDIS_URL` in your Blueprint with `fromService`:
+Read [private-networking.md](private-networking.md) first for current internal-connection requirements. All examples use the internal URL via the `REDIS_URL` environment variable. Wire `REDIS_URL` in your Blueprint with `fromService`:
 
 ```yaml
 envVars:

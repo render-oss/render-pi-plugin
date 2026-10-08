@@ -45,7 +45,7 @@ list_logs(
 
 **Common Variables:**
 - `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
+- `REDIS_URL` - Key Value connection string
 - `JWT_SECRET` - Authentication secret
 - `API_KEY` - Third-party API keys
 - `SECRET_KEY` - Django secret key
@@ -60,56 +60,16 @@ list_logs(
 
 **Fix Strategy:**
 
-**Step 1:** Add to render.yaml
-```yaml
-envVars:
-  # For database connections
-  - key: DATABASE_URL
-    fromDatabase:
-      name: postgres
-      property: connectionString
-
-  # For secrets (user fills in Dashboard)
-  - key: JWT_SECRET
-    sync: false
-  - key: API_KEY
-    sync: false
-
-  # For generated secrets
-  - key: SESSION_SECRET
-    generateValue: true
-
-  # For hardcoded config
-  - key: NODE_ENV
-    value: production
-```
-
-**Step 2:** For existing services, use MCP to add env vars directly:
-```
-update_environment_variables(
-  serviceId: "<service-id>",
-  envVars: [
-    {"key": "DATABASE_URL", "value": "<connection-string>"},
-    {"key": "JWT_SECRET", "value": "<secret-value>"}
-  ]
-)
-```
-
-**Step 3:** Commit and push (for Blueprint-managed services):
-```bash
-git add render.yaml
-git commit -m "Add missing environment variables"
-git push origin main
-```
-
-**Step 4:** If `sync: false` is used, remind user to fill values in Dashboard at:
-`https://dashboard.render.com/web/[service-name]/env`
+1. Read [environment-variables.md](environment-variables.md) and determine whether the service is managed through a Blueprint, Dashboard configuration, or an API/MCP operation.
+2. Inspect existing keys without exposing values, then add only the missing configuration through the intended source of truth.
+3. Use current Blueprint resource references rather than copied connection strings, and use an appropriate secret mechanism for sensitive values.
+4. Apply the applicable deploy and verify successful startup in logs.
 
 **Prevention:**
-- Always declare ALL env vars in render.yaml
-- Use `sync: false` for secrets
+- Keep the chosen configuration source authoritative
+- Never commit or print secret values
 - Double-check variable names (case-sensitive)
-- Test locally with `.env` file first
+- Keep local secret-bearing `.env` files out of version control
 
 ---
 
@@ -376,6 +336,8 @@ buildCommand: pip install -r requirements.txt
 
 ### 6. HEALTH_CHECK_TIMEOUT
 
+Read [deployments.md](deployments.md) for current health-check behavior, timing, and service-type support before interpreting this failure.
+
 **MCP Detection:**
 ```
 list_logs(
@@ -405,12 +367,12 @@ get_metrics(
 
 **Patterns to Match:**
 - `Health check timeout`
-- `failed to become healthy within 300 seconds`
+- `failed to become healthy`
 - `Service did not pass health check`
 - `GET / returned status 404`
 
 **Root Causes:**
-1. No health check endpoint implemented
+1. Configured health check endpoint is missing or incorrect
 2. App not binding to correct port
 3. Slow application startup
 4. Health check path incorrect
@@ -572,7 +534,7 @@ except Exception as e:
 **Description:** Build takes longer than allowed time.
 
 **Patterns to Match:**
-- `Build timed out after 15 minutes`
+- `Build timed out after 120 minutes`
 - `Command timed out`
 - `Build exceeded time limit`
 
@@ -599,9 +561,7 @@ except Exception as e:
 buildCommand: npm ci --prefer-offline && npm run build
 ```
 
-**Consider upgrading:**
-- Free tier: 15 minute build timeout
-- Paid tiers: Longer timeouts available
+If the build cannot complete within the 120-minute command limit, move expensive artifact generation to CI/CD or another build stage and deploy the resulting artifact or image.
 
 ---
 

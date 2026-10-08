@@ -143,7 +143,7 @@ describe("vendored Render skills", () => {
     const commit = record.match(/^commit: ([0-9a-f]{40})$/m)?.[1];
 
     expect(source).toBe("https://github.com/render-oss/skills");
-    expect(ref).toBe("main");
+    expect(ref).toMatch(/^(main|skills-v\d+\.\d+\.\d+)$/);
     expect(commit, "no 40-char commit recorded in .sync-source").toBeDefined();
     expect(record).not.toMatch(/^synced:/m);
   });

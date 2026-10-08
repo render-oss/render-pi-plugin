@@ -50,56 +50,10 @@ render logs -r <service-id> --level error -o json | grep "not defined"
 
 **Fix Procedure:**
 
-**Step 1:** Add to render.yaml
-
-For database connections:
-```yaml
-envVars:
-  - key: DATABASE_URL
-    fromDatabase:
-      name: postgres
-      property: connectionString
-```
-
-For secrets (user provides):
-```yaml
-envVars:
-  - key: JWT_SECRET
-    sync: false
-  - key: API_KEY
-    sync: false
-```
-
-For generated values:
-```yaml
-envVars:
-  - key: SESSION_SECRET
-    generateValue: true
-```
-
-For hardcoded config:
-```yaml
-envVars:
-  - key: NODE_ENV
-    value: production
-```
-
-**Step 2:** Commit and push
-```bash
-git add render.yaml
-git commit -m "Add missing environment variable: DATABASE_URL"
-git push origin main
-```
-
-**Step 3:** If using `sync: false`, instruct user:
-1. Go to Dashboard: `https://dashboard.render.com/web/[service]/env`
-2. Fill in the secret value
-3. Click "Save Changes"
-
-**Step 4:** Redeploy
-```bash
-render deploys create <service-id> --wait
-```
+1. Read [environment-variables.md](environment-variables.md), identify the intended source of truth, and inspect existing keys without exposing values.
+2. Add the missing key through that configuration surface, using current Blueprint wiring for resource references and an appropriate secret mechanism for sensitive values.
+3. Commit and push if the service is Blueprint-managed; otherwise apply the authorized service configuration change.
+4. Trigger the applicable deploy so the new value becomes active.
 
 **Verification:**
 ```bash
@@ -353,7 +307,7 @@ buildCommand: pip install -r requirements.txt
 buildCommand: go build -o bin/app .
 ```
 
-**Build Timeout (Free tier: 15 minutes):**
+**Build Timeout (120-minute build-command limit):**
 
 Optimize:
 ```yaml
@@ -361,7 +315,7 @@ Optimize:
 buildCommand: npm ci --prefer-offline && npm run build
 
 # Remove unused dependencies
-# Upgrade to paid tier for longer timeout
+# Consider pre-building expensive artifacts in CI/CD
 ```
 
 ---
@@ -370,14 +324,16 @@ buildCommand: npm ci --prefer-offline && npm run build
 
 ### Problem: Health Check Timeout
 
+Read [deployments.md](deployments.md) for current health-check behavior, timing, and service-type support before diagnosing this failure.
+
 **Symptoms:**
-- `Health check timeout after 300 seconds`
+- `Health check timeout`
 - `failed to become healthy`
 
 **Diagnosis Steps:**
 
 1. Check if app is binding to correct port
-2. Check if health check endpoint exists
+2. Check whether the configured health check endpoint exists and returns an accepted response
 3. Check startup time
 
 **Fix Procedure:**
@@ -586,8 +542,8 @@ Deployment Failed?
 
 Before asking for help, verify:
 
-- [ ] All environment variables are declared in render.yaml
-- [ ] Secrets have `sync: false` and are filled in Dashboard
+- [ ] Required environment-variable keys exist in the intended configuration source
+- [ ] Secret configuration is complete without exposing values
 - [ ] App binds to `process.env.PORT` (or equivalent)
 - [ ] App binds to `0.0.0.0` (not localhost)
 - [ ] Build command is non-interactive

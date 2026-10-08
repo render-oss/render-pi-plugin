@@ -19,7 +19,7 @@ MCP package or MCP support prerequisite to install.
 For a reproducible install pinned to this release:
 
 ```bash
-pi install https://github.com/render-oss/render-pi-plugin@v0.1.0
+pi install https://github.com/render-oss/render-pi-plugin@v0.2.0
 ```
 
 ## What you get (v1)

@@ -30,44 +30,7 @@ list_key_value()
 
 ### Environment Variables
 
-**All environment variables must be declared in render.yaml.**
-
-**Three patterns for environment variables:**
-
-1. **Hardcoded values** (non-sensitive configuration):
-```yaml
-envVars:
-  - key: NODE_ENV
-    value: production
-  - key: API_URL
-    value: https://api.example.com
-```
-
-2. **Database connections** (auto-generated):
-```yaml
-envVars:
-  - key: DATABASE_URL
-    fromDatabase:
-      name: postgres
-      property: connectionString
-  - key: REDIS_URL
-    fromDatabase:
-      name: redis
-      property: connectionString
-```
-
-3. **Secrets** (user fills in Dashboard):
-```yaml
-envVars:
-  - key: JWT_SECRET
-    sync: false
-  - key: API_KEY
-    sync: false
-  - key: STRIPE_SECRET_KEY
-    sync: false
-```
-
-Complete environment variable guide: [configuration-guide.md](configuration-guide.md)
+Follow [environment-variables.md](environment-variables.md) for the current configuration and mutation workflow. Deployment-specific configuration notes continue in [configuration-guide.md](configuration-guide.md).
 
 ### Port Binding
 
@@ -98,9 +61,9 @@ if port == "" {
 http.ListenAndServe(":"+port, handler)
 ```
 
-### Plan Defaults
+### Compute plans
 
-**Use `plan: free` unless the user specifies otherwise.** Refer to Render pricing for current limits and capacity.
+Select a compute plan appropriate to the resource and workload. Use [compute-plans.md](compute-plans.md) for current Plan IDs, defaults, availability, specifications, and pricing guidance.
 
 ### Build Commands
 
@@ -120,46 +83,18 @@ When services connect to databases in the same Render account, use `fromDatabase
 
 ### Health Checks
 
-Optional but recommended: add a `/health` endpoint for faster deployment detection.
+Follow [deployments.md](deployments.md) for current health-check behavior and endpoint guidance.
 
 ## Quick Reference
 
 ### MCP Tools (Preferred)
-```
-# Service Discovery
-list_services()
-get_service(serviceId: "<id>")
-list_postgres_instances()
-list_key_value()
 
-# Service Creation
-create_web_service(name, runtime, buildCommand, startCommand, ...)
-create_static_site(name, buildCommand, publishPath, ...)
-create_cron_job(name, runtime, schedule, buildCommand, startCommand, ...)
-create_postgres(name, plan, region)
-create_key_value(name, plan, region)
-
-# Environment Variables
-update_environment_variables(serviceId, envVars: [{key, value}, ...])
-
-# Deployment & Monitoring
-list_deploys(serviceId, limit)
-list_logs(resource: ["<id>"], level: ["error"])
-get_metrics(resourceId, metricTypes: [...])
-
-# Workspace
-get_selected_workspace()
-list_workspaces()
-```
+Follow [render-access.md](render-access.md) and inspect the tools currently available instead of relying on a fixed tool catalog.
 
 ### CLI Commands
 ```bash
 # Validate Blueprint
 render blueprints validate
-
-# Check workspace
-render workspace current -o json
-render workspace set
 
 # List services
 render services -o json
@@ -180,7 +115,7 @@ render deploys create <service-id> --wait
 - Docker: [../assets/docker.yaml](../assets/docker.yaml)
 
 ### Documentation
-- Full Blueprint specification: [blueprint-spec.md](blueprint-spec.md)
+- Current Blueprint authoring and validation workflow: [blueprints.md](blueprints.md)
 - Service types explained: [service-types.md](service-types.md)
 - Runtime options: [runtimes.md](runtimes.md)
 - Configuration guide: [configuration-guide.md](configuration-guide.md)
@@ -201,7 +136,7 @@ render deploys create <service-id> --wait
 
 **Issue:** Missing environment variables in Dashboard
 
-**Solution:** All env vars must be declared in render.yaml. Add missing vars with `sync: false` for secrets.
+**Solution:** Follow [environment-variables.md](environment-variables.md), identify the intended source of truth, and add the missing keys without exposing secret values.
 
 ---
 

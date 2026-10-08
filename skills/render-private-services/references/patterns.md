@@ -1,5 +1,7 @@
 # Private Service Patterns
 
+Read [private-networking.md](private-networking.md) first for current private-network scope, address, port, protocol, and Blueprint-reference behavior.
+
 ## Microservice Topology
 
 The most common private service pattern is a **public gateway + internal microservices**:
@@ -78,34 +80,17 @@ services:
     plan: starter
     region: oregon
     dockerfilePath: ./collector/Dockerfile
-    startCommand: otelcol --config /etc/otel-config.yaml
+    dockerCommand: otelcol --config /etc/otel-config.yaml
 ```
 
 Application services send telemetry to `otel-collector:<port>` on the private network.
-
-## Health Checks for Private Services
-
-Private services support health checks via the private network. Configure a health check path if your service exposes an HTTP endpoint:
-
-```yaml
-services:
-  - type: pserv
-    name: internal-api
-    healthCheckPath: /health
-```
-
-For non-HTTP services (gRPC, TCP), Render checks that the process is running and the port is bound. There is no custom health check for non-HTTP protocols.
 
 ## Port Binding
 
 - Private services **must** bind to at least one port
 - Bind to `0.0.0.0`, not `127.0.0.1` or `localhost`
-- The `PORT` env var defaults to `10000`, but you can use any non-restricted port
+- The `PORT` env var defaults to `10000`; confirm current restrictions in [private-networking.md](private-networking.md) before choosing another port
 - Multiple ports: your service can listen on multiple ports, but `fromService` only exposes the primary port via `property: port`
-
-### Restricted ports
-
-System ports (typically 0-1023) may be restricted. Use ports >= 1024 for your services.
 
 ## Private Service vs Web Service
 

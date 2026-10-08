@@ -1,6 +1,6 @@
 {
   "name": "@render/pi-render",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Render integration for the Pi coding agent — deployment skills and lazy hosted MCP access.",
   "keywords": [
     "pi-package"

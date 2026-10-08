@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-10-08
+
+### Changed
+
+- Vendored all 21 Render skills from `render-oss/skills` release `skills-v1.0.0` instead of `main`: shared, single-sourced reference content across skills, doc retrieval that does not require `curl`, and the Render Workflows skill updated for SDK 1.x.
+
+### Removed
+
+- Reference files replaced by shared references: `render-deploy/references/blueprint-spec.md`, `render-disks/references/sizing-and-snapshots.md`, `render-networking/references/troubleshooting.md`, `render-scaling/references/instance-types.md`, and `render-web-services/references/deploy-lifecycle.md`.
+
 ## 0.1.0 - 2026-08-03
 
 Initial GitHub release of the Render integration for the Pi coding agent.

@@ -1,53 +1,6 @@
 # Blueprint environment variable wiring
 
-This reference covers every supported pattern for `envVars` entries in `render.yaml`. Pair with the **render-blueprints** skill for service structure, previews, and validation.
-
-## Field summary
-
-| Field | Meaning |
-|-------|---------|
-| `key` | Environment variable name |
-| `value` | Hardcoded string (avoid secrets) |
-| `generateValue: true` | Platform generates a **base64 256-bit** random string |
-| `sync: false` | Dashboard prompt on **initial Blueprint create only**; ignored on updates; not for previews or env groups |
-| `fromDatabase` | Pull fields from a Postgres (or other supported) database resource |
-| `fromService` | Pull connection details from another Render service |
-| `fromGroup` | Import all variables from an environment group by name |
-
-## `value` — hardcoded string
-
-```yaml
-envVars:
-  - key: LOG_LEVEL
-    value: info
-  - key: APP_ENV
-    value: production
-```
-
-Use only for non-sensitive configuration. Never commit API keys or passwords this way.
-
-## `generateValue` — random secret
-
-```yaml
-envVars:
-  - key: SESSION_SECRET
-    generateValue: true
-```
-
-Render creates a **base64-encoded 256-bit** value at provision time. Rotating usually requires a manual Dashboard edit or API update depending on your workflow.
-
-## `sync: false` — Dashboard-supplied on first create
-
-```yaml
-envVars:
-  - key: STRIPE_SECRET_KEY
-    sync: false
-```
-
-- Prompt appears in the Dashboard when the Blueprint **first** creates the service.
-- **Updates** to `render.yaml` do **not** re-trigger the prompt for existing services.
-- **Invalid** in environment group definitions.
-- **Excluded** from preview environment behavior for protected values (treat as operator-managed).
+Read [environment-variables.md](environment-variables.md) first for current syntax discovery, secret handling, precedence, and mutation safety. This reference retains task-specific cross-resource wiring examples. Pair it with the **render-blueprints** skill for service structure, previews, and validation.
 
 ## `fromDatabase` — database properties
 
@@ -56,6 +9,7 @@ Reference a database defined in the same Blueprint (name must match the resource
 Available **properties** (use the subset your app needs):
 
 - `connectionString`
+- `connectionPoolString` (when managed PgBouncer is enabled)
 - `host`
 - `port`
 - `user`
@@ -76,6 +30,10 @@ services:
         fromDatabase:
           name: mydb
           property: connectionString
+      - key: DATABASE_POOL_URL
+        fromDatabase:
+          name: mydb
+          property: connectionPoolString
       - key: PGHOST
         fromDatabase:
           name: mydb
@@ -98,9 +56,9 @@ services:
           property: database
 ```
 
-## `fromService` — Key Value (Redis-style)
+## `fromService` — Key Value
 
-Use `type: keyvalue` with one of: `connectionString`, `host`, `port`, `hostport`.
+Use `type: keyvalue` with one of: `connectionString`, `host`, or `port`. If an application needs `host:port`, combine the separate `host` and `port` values.
 
 ```yaml
 services:
@@ -126,11 +84,6 @@ services:
           name: cache
           type: keyvalue
           property: port
-      - key: REDIS_HOSTPORT
-        fromService:
-          name: cache
-          type: keyvalue
-          property: hostport
 ```
 
 ## `fromService` — private service or web service
@@ -146,7 +99,7 @@ Alternatively, reference a **specific env var** exposed by the other service wit
 services:
   - type: pserv
     name: internal-api
-    env: docker
+    runtime: docker
     # ...
 
   - type: web
@@ -188,19 +141,9 @@ services:
         value: only-on-app
 ```
 
-Individual keys from the group appear as if they were defined on the service. **Service-level** keys override **group** keys with the same name.
-
-## Precedence
-
-1. **Service-level** `envVars` entries **override** any variable with the same name coming from linked **environment groups**.
-2. **Multiple groups** on one service: overlapping keys resolve using the **most recently created** group—this is **not guaranteed stable** across account operations. Prefer **non-overlapping** keys per group or a **single** group per concern.
-
 ## Edge cases
 
 - **`fromService` / `fromDatabase` outside the Blueprint file** — You may reference resources that are **not** declared in `render.yaml` **only if** they **already exist** in the same Render **workspace** (same team/account context) and names match. Otherwise provision fails at apply time.
-- **`sync: false` in groups** — Not allowed; use Dashboard or service-level entries.
-- **Preview environments** — Sensitive patterns (`sync: false`, some generated rotations) may behave differently; verify preview env docs in **render-blueprints**.
-- **Secret files** — Declared separately from `envVars`; paths are always `/etc/secrets/<filename>` at runtime.
 
 ## Minimal multi-pattern example
 

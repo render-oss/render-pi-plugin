@@ -3,7 +3,7 @@ name: render-keyvalue
 description: >-
   Provisions and configures Render Key Value (Redis-compatible Valkey 8)
   instances for caching, session storage, and job queues. Use when the user
-  needs Redis, Key Value, Valkey, a cache, session store, job queue backend,
+  needs Key Value, uses Redis or Valkey, or needs a cache, session store, or job queue backend,
   or needs to configure maxmemory policy, ipAllowList, connection strings,
   or internal vs external access.
   Trigger terms: Key Value, Redis, Valkey, cache, session store, REDIS_URL,
@@ -31,6 +31,8 @@ Render Key Value provides low-latency, Redis-compatible in-memory storage runnin
 
 For background worker setup and queue framework patterns, see **render-background-workers**. For Blueprint authoring, see **render-blueprints**.
 
+Before configuring or troubleshooting an internal Key Value connection, read `references/private-networking.md`.
+
 ## Key Concepts
 
 ### Valkey 8 (not Redis)
@@ -43,7 +45,7 @@ Every instance has two URLs:
 
 | URL type | When to use | Auth required |
 |----------|-------------|---------------|
-| **Internal** (`redis://red-xxx:6379`) | From Render services in the same region | No (by default) |
+| **Internal** (`redis://red-xxx:6379`) | From Render services in the same workspace and region | No (by default) |
 | **External** (`rediss://red-xxx:6379`) | From outside Render (local dev, CI) | Always |
 
 **Always prefer the internal URL** for production services—lower latency, no TLS overhead, communicates over the private network.
@@ -132,12 +134,9 @@ Available `fromService` properties for Key Value:
 - **Free instances:** No disk persistence. Data is lost on restart or upgrade.
 - **Upgrading from Free:** All data is lost during the upgrade because Free instances have no disk.
 
-## Instance Types and Upgrades
+## Compute Plans and Changes
 
-- Instance type determines **RAM** and **connection limit**
-- You can **upgrade** to a larger type (brief downtime, ~1-2 minutes)
-- You **cannot downgrade** to a smaller type
-- For instances larger than 10 GB RAM, contact Render support
+The compute plan determines available memory and connection limits. Use `references/compute-plans.md` for current Plan IDs and Key Value-specific change guidance.
 
 ## Connection Examples
 
@@ -157,6 +156,8 @@ See `references/connection-examples.md` for client code in Node.js (ioredis, nod
 
 | Document | Contents |
 |----------|----------|
+| `references/compute-plans.md` | Current Plan IDs, specifications, availability, and Key Value plan changes |
+| `references/private-networking.md` | Current private-network scope, internal addressing, isolation, and troubleshooting |
 | `references/connection-examples.md` | Client code for Node.js, Python, Ruby, Go |
 | `references/troubleshooting.md` | Auth errors, connection refused, memory full, migration from Redis 6 |
 
@@ -166,3 +167,16 @@ See `references/connection-examples.md` for client code in Node.js (ioredis, nod
 - **render-blueprints** — Full `render.yaml` schema, `fromService` patterns
 - **render-networking** — Private network, internal URLs
 - **render-env-vars** — Wiring `REDIS_URL` and other connection vars
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

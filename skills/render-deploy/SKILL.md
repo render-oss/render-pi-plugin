@@ -34,7 +34,7 @@ Activate this skill when users want to:
 
 ## Happy Path (New Users)
 
-Use this short prompt sequence before deep analysis to reduce friction:
+Use this short prompt sequence only to fill missing information. Do not ask the user to repeat details they already supplied. If the source and required resources are clear, proceed directly to method selection and deployment.
 1. Ask whether they want to deploy from a Git repo or a prebuilt Docker image.
 2. Ask whether Render should provision everything the app needs (based on what seems likely from the user's description) or only the app while they bring their own infra. If dependencies are unclear, ask a short follow-up to confirm whether they need a database, workers, cron, or other services.
 
@@ -73,7 +73,7 @@ If this path fits and MCP isn't configured yet, stop and guide MCP setup before 
 
 **Use Blueprint when ANY are true:**
 - Multiple services (web + worker, API + frontend, etc.)
-- Databases, Redis/Key Value, or other datastores are required
+- Databases, Key Value, or other datastores are required
 - Cron jobs, background workers, or private services
 - You want reproducible IaC or a render.yaml committed to the repo
 - Monorepo or multi-env setup that needs consistent configuration
@@ -94,70 +94,17 @@ git remote -v
 
 - If no remote exists, stop and ask the user to create/push a remote **or** switch to Docker image deploy.
 
-**2. Check MCP Tools Availability (Preferred for Single-Service)**
+**2. Establish Render Access**
 
-MCP tools provide the best experience. Check if available by attempting:
-```
-list_services()
-```
-
-If MCP tools are available, you can skip CLI installation for most operations.
-
-**3. Check Render CLI Installation (for Blueprint validation)**
-```bash
-render --version
-```
-If not installed, offer to install:
-- macOS: `brew install render`
-- Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh`
-
-**4. MCP Setup (if MCP isn't configured)**
-
-If `list_services()` fails, set up the Render MCP server. For detailed per-tool walkthroughs, see **render-mcp**.
-
-**Plugin setup:** If the Render plugin is installed, complete Render OAuth when prompted, then reload your tool and retry `list_services()`.
-
-**Manual MCP setup:** Add the Render MCP server to your AI tool's MCP config:
-- **URL:** `https://mcp.render.com/mcp`
-- **Auth header:** `Authorization: Bearer <YOUR_API_KEY>`
-- **API key:** `https://dashboard.render.com/u/*/settings#api-keys`
-
-After configuring, restart your tool and retry `list_services()`. Then set your workspace with `list_workspaces()` / `get_selected_workspace()`.
-
-**5. Check Authentication (CLI fallback only)**
-
-If MCP isn't available, use the CLI instead and verify you can access your account:
-```bash
-# Check if user is logged in (use -o json for non-interactive mode)
-render whoami -o json
-```
-
-If `render whoami` fails or returns empty data, the CLI is not authenticated. The CLI won't always prompt automatically, so explicitly prompt the user to authenticate:
-
-If neither is configured, ask user which method they prefer:
-- **API Key (CLI)**: `export RENDER_API_KEY="rnd_xxxxx"` (Get from https://dashboard.render.com/u/*/settings#api-keys)
-- **Login**: `render login` (Opens browser for OAuth)
-
-**6. Check Workspace Context**
-
-Verify the active workspace:
-```
-get_selected_workspace()
-```
-
-Or via CLI:
-```bash
-render workspace current -o json
-```
-
-To list available workspaces:
-```
-list_workspaces()
-```
-
-If user needs to switch workspaces, they must do so via Dashboard or CLI (`render workspace set`).
+Before reading or changing Render resources, follow [references/render-access.md](references/render-access.md) to choose an access path, authenticate, verify the intended workspace, and confirm the required capability. Blueprint validation still requires the Render CLI even when MCP is available.
 
 Once prerequisites are met, proceed with deployment workflow.
+
+Before triggering, monitoring, restarting, or rolling back a deploy, read [references/deployments.md](references/deployments.md) for the current lifecycle, health-check, and verification workflow.
+
+When resources communicate over Render's private network, read [references/private-networking.md](references/private-networking.md) before choosing regions or wiring addresses and ports.
+
+Before selecting or changing a service type, read [references/service-types.md](references/service-types.md).
 
 ---
 
@@ -173,13 +120,15 @@ Analyze the codebase to determine framework/runtime, build and start commands, r
 
 Create a `render.yaml` Blueprint file following the Blueprint specification.
 
-Complete specification: [references/blueprint-spec.md](references/blueprint-spec.md)
+Before authoring or changing the file, read [references/blueprints.md](references/blueprints.md) and follow its current specification-fetch, validation, repository-sync, and safety workflow.
+
+For variables, secrets, secret files, or environment groups, also read [references/environment-variables.md](references/environment-variables.md).
 
 **Key Points:**
-- Always use `plan: free` unless user specifies otherwise
-- Include ALL environment variables the app needs
-- Mark secrets with `sync: false` (user fills these in Dashboard)
-- Use appropriate service type: `web`, `worker`, `cron`, `static`, or `pserv`
+- Select a compute plan appropriate to the resource and workload. Consult [references/compute-plans.md](references/compute-plans.md) for current Plan IDs, defaults, availability, and pricing guidance instead of relying on examples in this skill.
+- Unless the user specifies a region, place new resources in the same region as their related existing services to preserve private network connectivity.
+- Include every environment variable the app requires and use the intended source of truth and secret mechanism from `references/environment-variables.md`
+- Use appropriate service type: `web`, `worker`, `cron`, `keyvalue`, or `pserv` (`type: web` with `runtime: static` for static sites)
 - Use appropriate runtime: [references/runtimes.md](references/runtimes.md)
 
 **Basic Structure:**
@@ -209,8 +158,12 @@ databases:
 - `web`: HTTP services, APIs, web applications (publicly accessible)
 - `worker`: Background job processors (not publicly accessible)
 - `cron`: Scheduled tasks that run on a cron schedule
-- `static`: Static sites (HTML/CSS/JS served via CDN)
-- `pserv`: Private services (internal only, within same account)
+- `pserv`: Private services (internal only, within same account and region)
+- `keyvalue`: Redis-compatible key-value store
+
+A service with `type: web` and `runtime: static` is a static site served via global CDN. Static sites do not have a `plan`.
+
+Postgres databases are defined under the `databases` key instead of the `services` key. They do not have a `type`.
 
 Service type details: [references/service-types.md](references/service-types.md)
 Runtime options: [references/runtimes.md](references/runtimes.md)
@@ -219,22 +172,23 @@ Template examples: [assets/](assets/)
 ### Step 2.5: Immediate Next Steps (Always Provide)
 
 After creating `render.yaml`, always give the user a short, explicit checklist and run validation immediately when the CLI is available:
-1. **Authenticate (CLI)**: run `render whoami -o json` (if not logged in, run `render login` or set `RENDER_API_KEY`)
-2. **Validate (recommended)**: run `render blueprints validate`
+1. **Confirm access**: follow [references/render-access.md](references/render-access.md)
+2. **Validate**: run `render blueprints validate render.yaml`
    - If the CLI isn't installed, offer to install it and provide the command.
 3. **Commit + push**: `git add render.yaml && git commit -m "Add Render deployment configuration" && git push origin main`
 4. **Open Dashboard**: Use the Blueprint deeplink and complete Git OAuth if prompted
-5. **Fill secrets**: Set env vars marked `sync: false`
+5. **Complete secret configuration**: Supply any values required by the selected environment-variable workflow
 6. **Deploy**: Click "Apply" and monitor the deploy
 
 ### Step 3: Validate Configuration
 
-Validate the render.yaml file to catch errors before deployment. If the CLI is installed, run the commands directly; only prompt the user if the CLI is missing:
+Follow the validation workflow in [references/blueprints.md](references/blueprints.md). If the CLI is installed, run the commands directly; only prompt the user if the CLI is missing:
 
 ```bash
-render whoami -o json  # Ensure CLI is authenticated (won't always prompt)
-render blueprints validate
+render blueprints validate render.yaml
 ```
+
+If the Blueprint is not at `render.yaml` relative to the current directory, pass its actual file path instead.
 
 Fix any validation errors before proceeding. Common issues:
 - Missing required fields (`name`, `type`, `runtime`)
@@ -300,7 +254,7 @@ Provide the deeplink to the user with these instructions:
 2. Click the deeplink to open Render Dashboard
 3. Complete Git provider OAuth if prompted
 4. Name the Blueprint (or use default from render.yaml)
-5. Fill in secret environment variables (marked with `sync: false`)
+5. Complete any required secret configuration without exposing values
 6. Review services and databases configuration
 7. Click "Apply" to deploy
 
@@ -308,26 +262,7 @@ The deployment will begin automatically. Users can monitor progress in the Rende
 
 ### Step 7: Verify Deployment
 
-After the user deploys via Dashboard, verify everything is working.
-
-**Check deployment status via MCP:**
-```
-list_deploys(serviceId: "<service-id>", limit: 1)
-```
-Look for `status: "live"` to confirm successful deployment.
-
-**Check for runtime errors (wait 2-3 minutes after deploy):**
-```
-list_logs(resource: ["<service-id>"], level: ["error"], limit: 20)
-```
-
-**Check service health metrics:**
-```
-get_metrics(
-  resourceId: "<service-id>",
-  metricTypes: ["http_request_count", "cpu_usage", "memory_usage"]
-)
-```
+After the user deploys via Dashboard, follow [references/deployments.md](references/deployments.md) to monitor the specific deploy through a terminal status and verify the resulting workload.
 
 If errors are found, proceed to the **Post-deploy verification and basic triage** section below.
 
@@ -372,7 +307,7 @@ Create the service (web or static) and any required databases or key-value store
 If MCP returns an error about missing Git credentials or repo access, stop and guide the user to connect their Git provider in the Render Dashboard, then retry.
 
 ### Step 3: Configure Environment Variables
-Add required env vars via MCP after creation. See [references/direct-creation.md](references/direct-creation.md).
+Before changing service configuration, read [references/environment-variables.md](references/environment-variables.md). Add required env vars via MCP after creation using [references/direct-creation.md](references/direct-creation.md).
 
 Remind the user that secrets can be set in the Dashboard if they prefer not to pass them via MCP.
 
@@ -387,12 +322,7 @@ For service discovery, configuration details, quick commands, and common issues,
 
 # Post-deploy verification and basic triage (All Methods)
 
-Keep this short and repeatable. If any check fails, fix it before redeploying.
-
-1. Confirm the latest deploy is `live` and serving traffic
-2. Hit the health endpoint (or root) and verify a 200 response
-3. Scan recent error logs for a clear failure signature
-4. Verify required env vars and port binding (`0.0.0.0:$PORT`)
+Follow [references/deployments.md](references/deployments.md) for deploy-state interpretation and post-live verification. If any check fails, fix it before redeploying.
 
 Detailed checklist and commands: [references/post-deploy-checks.md](references/post-deploy-checks.md)
 
@@ -401,3 +331,16 @@ If the service fails to start or health checks time out, use the basic triage gu
 
 Optional: If you need deeper diagnostics (metrics/DB checks/error catalog), suggest installing the
 `render-debug` skill. It is not required for the core deploy flow.
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

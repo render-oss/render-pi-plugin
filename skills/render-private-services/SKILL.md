@@ -29,6 +29,10 @@ Private services are identical to web services except they have **no public URL*
 
 For public-facing HTTP services, use **render-web-services**. For services that don't receive any traffic, use **render-background-workers**.
 
+Before configuring or troubleshooting private connectivity, read `references/private-networking.md`.
+Before attaching or changing a persistent disk, read `references/persistent-disks.md`.
+When choosing between a private service, web service, and worker, read `references/service-types.md`.
+
 ## Private Service vs Background Worker
 
 | Criterion | Private Service | Background Worker |
@@ -47,8 +51,8 @@ For public-facing HTTP services, use **render-web-services**. For services that 
 - Reachable at `<service-name>:<port>` on the private network by services in the same region and workspace
 - Can listen on **any port** (except restricted system ports)—not limited to HTTP or port 10000
 - Supports **any protocol**: HTTP, gRPC, TCP, WebSocket, custom binary protocols
-- Same build/deploy lifecycle as web services (build command, start command, pre-deploy, health checks via the private network)
-- Supports persistent disks, scaling, Docker runtime—same capabilities as web services
+- Same build/deploy lifecycle as web services (build command, start command, pre-deploy)
+- Supports persistent disks and Docker runtime. A disk-backed private service stays **single-instance** and cannot use autoscaling or zero-downtime deploys; follow `references/persistent-disks.md` for details.
 
 ## Connecting to a Private Service
 
@@ -83,7 +87,7 @@ You can also reference a specific env var from the private service using `envVar
 Private services **must bind to at least one port**. If your process does not need to receive traffic, create a background worker instead.
 
 - Bind to `0.0.0.0` (not `127.0.0.1` or `localhost`)
-- The `PORT` env var defaults to `10000`, but you can listen on any non-restricted port
+- The `PORT` env var defaults to `10000`; confirm current restrictions in `references/private-networking.md` before choosing another port
 - For non-HTTP protocols (gRPC, TCP), configure your server on the desired port and tell consumers the `hostport`
 
 ## Blueprint Configuration
@@ -158,7 +162,10 @@ services:
 
 | Document | Contents |
 |----------|----------|
-| `references/patterns.md` | Microservice topology, gRPC setup, sidecar patterns, health checks for private services |
+| `references/private-networking.md` | Current private-network scope, addresses, ports, discovery, isolation, and troubleshooting |
+| `references/patterns.md` | Microservice topology, gRPC setup, and sidecar patterns |
+| `references/persistent-disks.md` | Service-attached disk constraints, configuration, sizing, and snapshots |
+| `references/service-types.md` | Service-type selection and execution models |
 
 ## Related Skills
 
@@ -166,4 +173,17 @@ services:
 - **render-networking** — Private network, DNS, service discovery
 - **render-background-workers** — Services that don't receive traffic
 - **render-blueprints** — Full `render.yaml` schema, `fromService` wiring
-- **render-scaling** — Instance types and autoscaling for private services
+- **render-scaling** — Compute plans and autoscaling for private services
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

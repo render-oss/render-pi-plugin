@@ -32,6 +32,8 @@ Apply this skill when the user:
 
 For deploy flows and Blueprint basics, see **render-deploy** and **render-blueprints**. For private networking between services, see **render-networking**. For env var patterns, see **render-env-vars**.
 
+Before configuring or troubleshooting an internal database connection, read `references/private-networking.md`.
+
 ## Connection Patterns
 
 Render exposes **two connection URLs** for the same logical database:
@@ -54,7 +56,7 @@ URL formats, Dashboard locations, Blueprint `fromDatabase`, pooling, and common 
 - **Immutable after creation**: `databaseName`, database **user**, **region**, **PostgreSQL major version**. Plan these before create; changing them requires a new database and migration.
 - **Storage size**: **1 GB** or **multiples of 5 GB** when provisioning.
 
-Wire apps with Blueprint `fromDatabase` using `property: connectionString` (or `host`, `port`, `user`, `password`, `database` individually). See **render-blueprints**.
+Wire apps with Blueprint `fromDatabase` using `property: connectionString`, `connectionPoolString` when managed PgBouncer is enabled, or `host`, `port`, `user`, `password`, and `database` individually. See **render-blueprints**.
 
 ### Multiple logical databases
 
@@ -71,30 +73,13 @@ Monitor disk and plan exports or cleanup before you hit hard limits. Backup and 
 
 ## Connection Limits
 
-Maximum connections depend on **instance RAM** (current-generation plans):
+Connection limits depend on the database's compute plan. Use `references/compute-plans.md` to fetch the current Postgres plan catalog and connection limits instead of relying on a memorized table.
 
-| RAM | Max connections (typical) |
-|-----|---------------------------|
-| Under 8 GB | 100 |
-| 8 GB | 200 |
-| 16 GB | 300 |
-| 32 GB and above | 500 |
+Render provides integrated **PgBouncer** connection pooling for paid Postgres instances. Enable it with `connectionPool: pgbouncer` in a Blueprint, then connect clients with the database's `connectionPoolString`. Keep application pool sizes aligned with the database connection limit; clients that require session-level state or dedicated long-lived connections must use the direct connection string. Enabling the managed pool restarts the database and causes a few minutes of unavailability. More detail: `references/connection-guide.md` and `references/performance-tuning.md`.
 
-**Legacy** database plans may have **lower** limits; confirm in the Dashboard or API for the specific plan.
+## High Availability and Compute Plans
 
-Render does **not** provide a built-in pooler; use **application-side pooling** (framework pools, PgBouncer, pgpool, etc.). Limits are **hard**—exhausting them causes connection errors. More detail: `references/connection-guide.md` and `references/performance-tuning.md`.
-
-## High Availability
-
-**High availability (HA)** is available when:
-
-- Workspace is **Professional** or higher, **and**
-- Database plan is **Pro** or higher, **and**
-- **PostgreSQL 13+**
-
-**Instance type changes** cause **brief downtime**. With HA, downtime is typically **less** than **without HA** (often on the order of **minutes** without HA—exact duration depends on plan and operation).
-
-**One-way migration off legacy types**: After moving to current-generation instance types, you **cannot** move back to **legacy** instance types.
+HA eligibility and plan-change behavior depend on the Postgres compute plan and version. See `references/compute-plans.md` before recommending a plan or changing an existing database.
 
 ## Read Replicas
 
@@ -130,6 +115,8 @@ Shorthand (same tools): `list_postgres_instances()`, `get_postgres(postgresId)`,
 
 | Document | Contents |
 |----------|----------|
+| `references/compute-plans.md` | Current Postgres Plan IDs, connection limits, downtime, HA, and legacy-plan migration |
+| `references/private-networking.md` | Current private-network scope, internal addressing, isolation, and troubleshooting |
 | `references/connection-guide.md` | Internal vs external URLs, SSL, allow list, Blueprint wiring, pooling, multi-database URLs, troubleshooting |
 | `references/backup-and-recovery.md` | Snapshots, PITR, `pg_dump` / `pg_restore`, restore flows, deletion, cross-region |
 | `references/performance-tuning.md` | `pg_stat_statements`, indexes, bloat, `EXPLAIN ANALYZE`, metrics, scaling |
@@ -140,3 +127,16 @@ Shorthand (same tools): `list_postgres_instances()`, `get_postgres(postgresId)`,
 - **render-blueprints** — `databases`, `fromDatabase`, `readReplicas`, immutable fields
 - **render-networking** — Private services, regions, and how traffic routes between resources
 - **render-env-vars** — Storing `DATABASE_URL` and secret wiring patterns
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

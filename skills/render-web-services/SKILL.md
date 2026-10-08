@@ -30,6 +30,10 @@ This skill covers **Web Service** behavior on Render: how traffic reaches your p
 
 Deeper patterns live under `references/` (health checks, domains, deploy phases).
 
+Before configuring or troubleshooting deploys and health checks, read `references/deployments.md`.
+Before attaching or changing a persistent disk, read `references/persistent-disks.md`.
+Before configuring or troubleshooting private connectivity or additional ports, read `references/private-networking.md`.
+
 ## Port Binding
 
 - Listen on **`0.0.0.0`** (all interfaces). Binding only to **`localhost`** or **`127.0.0.1`** prevents Render’s proxy from reaching your app.
@@ -49,11 +53,7 @@ Deeper patterns live under `references/` (health checks, domains, deploy phases)
 
 ## Health Checks
 
-- Configure a path via **`healthCheckPath`** in a Blueprint or the **Health Check Path** field in the Dashboard.
-- Render issues **HTTP GET** requests to that path. Responses must be **`2xx` or `3xx`** for success.
-- **Failed health checks** prevent a new deploy from **going live** (the deploy does not succeed in taking production traffic as expected).
-- Render probes on a **repeat interval** with a per-request **timeout**; both are **configurable** in service settings (see Dashboard). Failed checks during rollout prevent the new revision from receiving traffic.
-- Check frequency, timeouts, and tuning guidance in `references/health-check-patterns.md`.
+Follow `references/deployments.md` for current platform behavior. For endpoint implementations and common failure patterns, see `references/health-check-patterns.md`.
 
 ## Custom Domains
 
@@ -67,37 +67,24 @@ See `references/custom-domains.md` for Dashboard steps, verification, and troubl
 
 ## Auto-Deploy and PR Previews
 
-- **`autoDeployTrigger`** (Blueprint) / auto-deploy settings control when production deploys run:
-  - **`commit`** — deploy on every push to the tracked branch
-  - **`checksPass`** — deploy only when required **Git checks** pass
-  - **`off`** — **manual** deploys only (Dashboard, CLI, hooks)
+- Follow `references/deployments.md` for auto-deploy behavior and manual triggers.
 - **PR previews** are configured under Blueprint **`previews.generation`** (and related preview settings); generation behavior depends on repo integration and plan.
 
 ## Persistent Disks
 
-- Attach disks via the **`disk`** field in a Blueprint (or equivalent Dashboard storage settings).
-- A service with an attached persistent disk is **single-instance** only: **horizontal scaling** is not available in that configuration.
-- **Zero-downtime deploys are disabled** when a persistent disk is attached—deploys follow a different rollout pattern.
-- **Disk size increases** are allowed; **decreases** are not.
-- The disk is **not mounted during the build phase**—only at **runtime** in the running service.
+- A disk-backed web service stays **single-instance** and cannot scale horizontally.
+- Attaching a disk disables **zero-downtime deploys**.
+- The disk is available only to the running service, not during builds or pre-deploy commands.
+- If the workload needs horizontal scaling or uninterrupted deploys, use shared external storage instead of a service-attached disk.
+- Follow `references/persistent-disks.md` for current support, configuration, mount-path, runtime-access, sizing, and snapshot behavior.
 
 ## Deploy Lifecycle
 
-Typical flow:
-
-1. **Build** — clone repo, run **`buildCommand`**, produce the runnable artifact/image.
-2. **Pre-deploy command** (optional) — runs in the **new** image **before** traffic switches; use for **migrations**. If it **fails**, the deploy is **canceled**.
-3. **Deploy** — new instances start; health checks must pass before traffic moves.
-4. **Zero-downtime swap** (when applicable) — traffic shifts to new instances; **old instances drain** in-flight work.
-
-- **`maxShutdownDelaySeconds`** (range **1–300**, **default 30**) bounds how long old instances may continue handling requests during drain before shutdown.
-- **Rollbacks** — revert to a **previous successful deploy** from the Dashboard.
-
-Full sequence, hooks, filters, and CLI notes: `references/deploy-lifecycle.md`.
+For paid web services, use `preDeployCommand` for database migrations and other release tasks that must succeed before the new version receives traffic. It runs after the build on separate compute; if it fails, the deploy is canceled and the previous live version continues serving. Follow `references/deployments.md` for the full build, readiness, traffic-switching, draining, rollback, restart, and deploy-hook behavior.
 
 ## Free Tier Notes
 
-Free Web Services have **separate limits**: e.g. **no custom domains** on the free instance type, and services **spin down after inactivity** (cold starts on next request). Treat free-tier behavior as distinct from paid Web Service defaults when advising on domains, uptime, and scaling.
+Free Web Services have **separate limits**: services **spin down after inactivity** (cold starts on the next request), and they do not support scaling beyond a single instance or persistent disks. Treat free-tier behavior as distinct from paid Web Service defaults when advising on uptime and scaling.
 
 ## References
 
@@ -105,7 +92,9 @@ Free Web Services have **separate limits**: e.g. **no custom domains** on the fr
 |--------|------|
 | Health check design, timeouts, pitfalls | `references/health-check-patterns.md` |
 | Domains, DNS, TLS verification | `references/custom-domains.md` |
-| Build, pre-deploy, drain, rollbacks, triggers | `references/deploy-lifecycle.md` |
+| Deploy lifecycle, health checks, rollback, triggers | `references/deployments.md` |
+| Persistent disk constraints and configuration | `references/persistent-disks.md` |
+| Private-network addressing, ports, discovery, and troubleshooting | `references/private-networking.md` |
 
 ## Related Skills
 
@@ -113,3 +102,16 @@ Free Web Services have **separate limits**: e.g. **no custom domains** on the fr
 - **render-docker** — Docker-based Web Services and image/runtime details
 - **render-networking** — Private network, internal URLs, multi-port private listeners
 - **render-scaling** — Instance counts, plans, and scaling constraints (including disk interactions)
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->
