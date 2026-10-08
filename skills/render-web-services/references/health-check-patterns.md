@@ -1,6 +1,6 @@
 # Health check patterns for Render Web Services
 
-Render uses an HTTP **GET** to your configured **`healthCheckPath`**. The response must be **`2xx` or `3xx`**. Anything else (including **`4xx`**, **`5xx`**, timeouts, or connection failures) counts as **unhealthy** and can **block a deploy from going live** or trigger rollback behavior.
+Read [deployments.md](deployments.md) first for current Render health-check behavior, timing, and deploy effects. This reference focuses on application endpoint design.
 
 ## Endpoint design
 
@@ -59,12 +59,6 @@ async fn health() -> impl Responder {
     HttpResponse::Ok().finish()
 }
 ```
-
-## Timeouts and tuning
-
-- If the app **starts listening after** the health check window expects readiness, deploys may **fail or roll back**.
-- **Slow-starting** apps (large JVM warmup, many workers): ensure the **listen** happens as early as possible, or **increase** health check **timeout** / **interval** in settings if the platform allows—so the first successful check occurs after the server is truly up.
-- A failing dependency check (DB down) will keep the service **unhealthy**; that is often correct for **readiness** but harsh if you only wanted **liveness**. Prefer **readiness** semantics for Render’s path unless you have a reason not to.
 
 ## Common issues
 

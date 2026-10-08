@@ -60,7 +60,7 @@ Run **`VACUUM ANALYZE`** (or rely on autovacuum tuning) on heavily updated table
 
 | Need | Direction |
 |------|-----------|
-| More CPU/RAM/connections | **Vertical**: larger database **plan** / instance type |
+| More CPU/RAM/connections | **Vertical**: larger database **compute plan** |
 | Read-heavy workload | **Read replicas** (up to 5); route read-only traffic explicitly |
 | Disk pressure | Autoscaling grows at ~**90%** (see main skill); **cannot shrink**—archive or migrate data |
 

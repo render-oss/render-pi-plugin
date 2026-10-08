@@ -1,6 +1,6 @@
 # Post-deploy checks
 
-Use this after any deploy or service creation. Keep it short; stop when a check fails.
+Use this after any deploy or service creation. First follow [deployments.md](deployments.md) to identify the specific deploy, monitor it to a terminal state, and choose service-type-appropriate verification. Keep the checks below short; stop when one fails.
 
 ## 1) Confirm deploy status
 
@@ -8,13 +8,13 @@ Use this after any deploy or service creation. Keep it short; stop when a check 
 list_deploys(serviceId: "<service-id>", limit: 1)
 ```
 
-- Expect `status: "live"`.
+- Do not report success until the intended deploy is `live`.
 - If status is failed, inspect build/runtime logs immediately.
 
 ## 2) Verify service health
 
-- Hit the health endpoint (preferred) or `/` and confirm a 200 response.
-- If there is no health endpoint, add one and redeploy.
+- For web services, exercise the intended public behavior and any configured health endpoint.
+- For other service types, use the verification appropriate to the workload in [deployments.md](deployments.md).
 
 ## 3) Scan recent error logs
 

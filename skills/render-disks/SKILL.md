@@ -18,7 +18,9 @@ metadata:
 
 # Render Persistent Disks
 
-Persistent disks are high-performance SSDs you attach to a Render service to preserve filesystem changes across deploys and restarts. Without a disk, services have an **ephemeral filesystem**—all local file changes are lost on every deploy.
+Persistent disks preserve files written beneath a service's configured mount path across deploys and restarts.
+
+Before designing, configuring, resizing, transferring data to, snapshotting, restoring, or troubleshooting a disk, read `references/persistent-disks.md`.
 
 ## When to Use
 
@@ -26,126 +28,45 @@ Persistent disks are high-performance SSDs you attach to a Render service to pre
 - Running a **self-managed database** (MySQL, MongoDB, ClickHouse) on Render
 - Deploying **stateful infrastructure** (Elasticsearch, Kafka, RabbitMQ, Mattermost)
 - Understanding **why scaling is blocked** or **zero-downtime deploys are disabled**
-- **Restoring data** from an automatic disk snapshot
+- **Restoring data** from a disk snapshot
 
 For managed databases, prefer **Render Postgres** (render-postgres) or **Key Value** (render-keyvalue) over self-managed alternatives on disk.
 
-## Critical Constraints
+## Core Decisions
 
-These constraints affect architecture decisions. Understand them **before** attaching a disk:
+- Render's default filesystem is ephemeral. Only files written beneath a disk's mount path persist across deploys and restarts.
+- A disk-backed service is single-instance: it cannot use horizontal scaling or zero-downtime deploys.
+- If file storage must be shared by scaled instances, use external object storage such as S3 or R2. Use Render Postgres for relational data and Render Key Value for managed cache or queue state.
+- Choose the smallest current disk size that accommodates observed usage because capacity can increase but cannot decrease. For a small upload service, 1–5 GB is a reasonable starting range when supported by the current limits.
 
-| Constraint | Impact |
-|------------|--------|
-| **Single instance only** | Cannot scale horizontally (`numInstances` must be 1, autoscaling not available) |
-| **No zero-downtime deploys** | Old instance stops before new instance starts (brief downtime on each deploy) |
-| **Runtime access only** | Disk is not available during `buildCommand` or `preDeployCommand` (those run on separate compute) |
-| **Not accessible from other services** | Only the attached service can read/write the disk |
-| **Not available on cron jobs** | Attach to a web service, private service, or background worker instead |
-| **Not available on one-off jobs** | One-off jobs run on separate compute without disk access |
-| **Can increase size, cannot decrease** | Start small and grow as needed |
+## Blueprint Setup
 
-## Setup
-
-### Dashboard
-
-1. Go to your service's **Disks** page
-2. Set the **mount path** (absolute path where persistent data is stored)
-3. Choose a **size** in GB
-4. Click **Add disk** — triggers a new deploy
-
-### Blueprint
+For a native Node.js upload service, mount a subdirectory such as `/opt/render/project/src/uploads`, not the source root itself, and configure the application to write uploads there:
 
 ```yaml
 services:
   - type: web
-    name: cms
+    name: uploads
     runtime: node
-    plan: starter
-    region: oregon
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci
     startCommand: npm start
     disk:
-      name: cms-data
-      mountPath: /var/data
-      sizeGB: 10
+      name: uploads-data
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 5
 ```
 
-## Mount Path
+Fetch the current disk documentation and Blueprint specification through `references/persistent-disks.md` before finalizing the mount path or size.
 
-Only files written **under the mount path** are preserved. Everything else remains ephemeral.
+## Database Backups and File Recovery
 
-| Runtime | Source code path | Example mount path |
-|---------|------------------|--------------------|
-| Node.js, Python, Ruby, Elixir, Rust | `/opt/render/project/src` | `/opt/render/project/src/uploads` |
-| Go | `/opt/render/project/go/src/github.com/<user>/<repo>` | `.../data` |
-| Docker | Dockerfile's `WORKDIR` (commonly `/app`) | `/app/storage` |
-
-### Disallowed mount paths
-
-Cannot mount at: `/`, `/opt`, `/opt/render`, `/opt/render/project`, `/opt/render/project/src`, `/home`, `/home/render`, `/etc`, `/etc/secrets`.
-
-Subdirectories of these paths are fine (e.g. `/opt/render/project/src/uploads`).
-
-## Snapshots
-
-- Render creates an **automatic snapshot every 24 hours**
-- Snapshots are available for **at least 7 days**
-- Restore from the service's **Disks** page in the Dashboard
-- **Full restore only** — you cannot restore individual files
-- **Destructive** — all changes after the snapshot are lost
-
-**Do not restore snapshots for custom database recovery.** Use database-native backup tools (mysqldump, mongodump) instead—disk snapshots may capture a corrupted database state.
-
-## File Transfers
-
-### SCP (via SSH)
-
-```bash
-# Download from service
-scp -s YOUR_SERVICE@ssh.YOUR_REGION.render.com:/mount/path/file ./local-file
-
-# Upload to service
-scp -s ./local-file YOUR_SERVICE@ssh.YOUR_REGION.render.com:/mount/path/file
-```
-
-Requires SSH access enabled for the service.
-
-### Magic-Wormhole
-
-Available on all native runtimes (install manually on Docker):
-
-```bash
-# On the service shell
-wormhole send /mount/path/file
-
-# On your local machine
-wormhole receive
-```
-
-## Common Patterns
-
-| Pattern | Service type | Mount path | Notes |
-|---------|-------------|------------|-------|
-| WordPress / Ghost / CMS | Web Service | `/var/data` or `/app/content` | Media uploads, SQLite |
-| Self-managed MySQL | Private Service | `/var/lib/mysql` | Use mysqldump for backups, not disk snapshots |
-| File upload API | Web Service | `/opt/render/project/src/uploads` | Single instance constraint |
-| Elasticsearch | Private Service | `/usr/share/elasticsearch/data` | Stateful search infrastructure |
-
-## Common Mistakes
-
-| Mistake | Fix |
-|---------|-----|
-| Expecting horizontal scaling with a disk | Not possible — disk services are single-instance only |
-| Mounting at a disallowed path | Use a subdirectory (e.g. `/opt/render/project/src/uploads` not `/opt/render/project/src`) |
-| Reading disk during build or pre-deploy | These run on separate compute — move logic to the start command |
-| Restoring disk snapshot for a database | Use database-native backups instead |
-| Starting with a large disk size | Start small — you can increase but never decrease |
+Do not use a disk snapshot to recover a self-managed database such as MySQL: a filesystem snapshot can restore an inconsistent or corrupted database state. Use database-native backups such as `mysqldump` and test their restore procedure. Move backup files off the service with a currently supported transfer method such as SCP with SSH or Magic-Wormhole. Snapshot restores replace the entire disk and permanently discard changes made after the selected snapshot.
 
 ## References
 
 | Document | Contents |
 |----------|----------|
-| `references/sizing-and-snapshots.md` | Sizing guidance, snapshot lifecycle, restore procedures, cost patterns |
+| `references/persistent-disks.md` | Current disk constraints, configuration, sizing, snapshots, restores, and transfers |
 
 ## Related Skills
 
@@ -153,3 +74,16 @@ wormhole receive
 - **render-private-services** — Internal services with disks (Elasticsearch, MySQL)
 - **render-blueprints** — `disk` field reference in `render.yaml`
 - **render-postgres** — Managed database alternative (no disk management needed)
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

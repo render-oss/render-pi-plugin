@@ -6,25 +6,19 @@
 
 **Cause:** MCP server not configured in the AI tool.
 
-**Fix:** Follow the setup instructions in the main SKILL.md. If you use the Render plugin, reinstall or update it and reload the tool so it loads the plugin's MCP server. For manual clients, add the config and restart the tool.
+**Fix:** Follow the current setup and verification workflow in [render-access.md](render-access.md).
 
 ### "Connection refused" or timeout
 
 **Cause:** Network issue or incorrect URL.
 
-**Fix:**
-- Verify the URL is exactly `https://mcp.render.com/mcp`
-- Check internet connectivity
-- Some corporate firewalls block MCP connections — try from a different network
+**Fix:** Confirm the current endpoint and transport using [render-access.md](render-access.md), check internet connectivity, and account for corporate firewalls that might block MCP connections.
 
 ### "Transport error" or "SSE not supported"
 
 **Cause:** Using the wrong transport or URL.
 
-**Fix:**
-- Use HTTP transport (streamable HTTP), not SSE
-- URL should be `https://mcp.render.com/mcp`, not `https://mcp.render.com/sse`
-- For Claude Code: use `--transport http` flag
+**Fix:** Reconfigure the client from the current MCP documentation fetched through [render-access.md](render-access.md).
 
 ## Authentication Errors
 
@@ -32,24 +26,17 @@
 
 **Cause:** Missing or expired OAuth authorization (plugin setup), or a missing, invalid, or expired API key (manual setup).
 
-**Fix:**
-1. Plugin setup: reinstall or update the Render plugin, then complete the Render OAuth prompt after reloading the tool.
-2. Manual setup: generate a new API key (`https://dashboard.render.com/u/*/settings#api-keys`) and update it in your tool's MCP config.
-3. Restart the tool.
-4. Verify with `list_services()`.
+**Fix:** For OAuth, reconnect the Render plugin or connector and complete authorization again. For manual setup, create a new key at `https://dashboard.render.com/u/settings#api-keys`, replace the configured bearer token, restart the client, and verify with `list_services()`. In Claude Code, run `claude mcp remove render`, then re-add it with the manual setup command in `SKILL.md`.
 
 ### "Forbidden" or 403
 
 **Cause:** OAuth authorization or API key doesn't have access to the requested resource, or wrong workspace.
 
-**Fix:**
-- Check the active workspace with `get_selected_workspace()`
-- Switch workspaces if needed with `list_workspaces()`
-- Ensure the API key belongs to an account with access to the workspace
+**Fix:** Verify the intended workspace and confirm that the authenticated account has access to it, following [render-access.md](render-access.md).
 
 ## Tool-Specific Issues
 
-> Installed the Render plugin? It provides the MCP server over OAuth — complete the Render OAuth prompt and reload the tool after installing or updating the plugin. The manual notes below apply to hand-configured MCP clients.
+Use the current client-specific setup instructions fetched through [render-access.md](render-access.md). Also check these local failure modes:
 
 ### Cursor
 
@@ -60,37 +47,26 @@
 
 ### Claude Code
 
-- Added via CLI: `claude mcp add --transport http render https://mcp.render.com/mcp --header "Authorization: Bearer <key>"`
-- To update: `claude mcp remove render` then re-add
-- To list: `claude mcp list`
+- Confirm the configured server appears in the client's MCP server list.
+- Replace a stale manual setup with `claude mcp remove render`, then re-add it with the manual setup command in `SKILL.md`.
 
 ### Codex
 
-- Requires `RENDER_API_KEY` env var to be set in the shell where Codex runs
-- Added via: `codex mcp add render --url https://mcp.render.com/mcp --bearer-token-env-var RENDER_API_KEY`
-- If the env var is not set when Codex starts, MCP auth fails
+- If the MCP configuration uses `RENDER_API_KEY`, it must be set in the shell or environment where Codex starts.
+- Restart Codex after changing its MCP configuration or credential environment.
 
 ## Workspace Issues
 
 ### "No workspace selected"
 
-**Fix:** Run `list_workspaces()` to see available workspaces, then ask the user to select one.
+**Fix:** Follow the workspace-selection workflow in [render-access.md](render-access.md).
 
 ### Operations return empty results
 
 **Cause:** Active workspace has no services, or wrong workspace is selected.
 
-**Fix:** Verify with `get_selected_workspace()` and switch if needed.
+**Fix:** Call `get_selected_workspace()` to inspect the active workspace and `list_workspaces()` to find the intended one. Verify credential access before concluding that no resources exist.
 
 ## MCP vs CLI Fallback
 
-If MCP cannot be configured (network restrictions, unsupported tool), use the Render CLI as a fallback. See **render-cli** for setup and usage.
-
-| Capability | MCP | CLI |
-|-----------|-----|-----|
-| List services | `list_services()` | `render services -o json` |
-| View logs | `list_logs(...)` | `render logs -r SVC` |
-| Deploy | `trigger_deploy(serviceId)` | `render deploys create SVC --wait` |
-| Metrics | `get_metrics(...)` | Not available |
-| SQL queries | `query_render_postgres(...)` | `render psql DB -c "SQL"` |
-| SSH | Not available | `render ssh SVC` |
+Use the supported fallback selection in [render-access.md](render-access.md), then inspect the current CLI or MCP capability surface instead of relying on a fixed comparison table.

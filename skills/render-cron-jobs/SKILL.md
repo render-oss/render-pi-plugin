@@ -30,10 +30,13 @@ This skill covers **Cron Job** services on Render: how schedules run, what the p
 
 Expression cheat sheets, framework `startCommand` examples, and Heroku Scheduler migration mapping live under `references/`.
 
+Before configuring or troubleshooting a cron job's outbound private-network connection, read `references/private-networking.md`.
+When choosing between a cron job, worker, and Workflow, read `references/service-types.md`.
+
 ## Configuration
 
 - **Schedule**: a **cron expression evaluated in UTC**, not the team’s local timezone. All times in the Dashboard and Blueprints are UTC.
-- **Command**: any valid **Linux shell command** or **bash script** path. The process must **exit** when work is done—**billing is based on run duration** (prorated by the second).
+- **Command**: any valid **Linux shell command** or **bash script** path. The process must **exit** when work is done because longer runs consume more billable compute. Confirm current details at [Render pricing](https://render.com/pricing).
 - **Source**:
   - **Git repository** — Render **builds on push** (same deploy model as other repo-backed services); the built artifact runs on each scheduled invocation.
   - **Prebuilt Docker image** — the image is **pulled before each run** and is **not retained between runs** (no warm cache of the image layer set across invocations in the same way as a long-lived service).
@@ -43,7 +46,7 @@ Expression cheat sheets, framework `startCommand` examples, and Heroku Scheduler
 - **No persistent disk** — cron job services **cannot** provision or attach Render persistent disks; plan for object storage or databases instead.
 - **Single-run guarantee** — at most **one active run** per cron service at a time. A new scheduled tick does not start a second overlapping instance.
 - **Maximum run length**: **12 hours** per invocation.
-- **Pricing**: **$1/month minimum** per cron job service; usage is **prorated by the second** beyond plan/minimum rules that apply to your account.
+- **Pricing**: Running cron jobs incurs an additional cost. Confirm current details at [Render pricing](https://render.com/pricing).
 - **Private network**: cron jobs **can send** traffic **to** other services on the private network; they **cannot receive** inbound private-network connections (no internal hostname for accepting traffic from other services).
 
 ## Execution Behavior
@@ -98,6 +101,8 @@ services:
 
 | Topic | File |
 |--------|------|
+| Private-network scope, internal addresses, and troubleshooting | `references/private-networking.md` |
+| Service-type selection and execution models | `references/service-types.md` |
 | Expression examples, framework commands, errors, env vars | `references/cron-patterns.md` |
 | Heroku Scheduler → Render mapping, blueprint example | `references/migration-from-scheduler.md` |
 
@@ -107,3 +112,16 @@ services:
 - **render-blueprints** — Full `render.yaml` schema, previews, common mistakes
 - **render-background-workers** — Long-lived processes, queues, no 12h cap
 - **render-workflows** — Orchestrated and parallel jobs, often triggered on a schedule from cron
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

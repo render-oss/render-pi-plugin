@@ -105,9 +105,9 @@ describe("package manifest", () => {
     }
   });
 
-  it("carries the metadata for the v0.1.0 GitHub release", () => {
+  it("carries the metadata for the v0.2.0 GitHub release", () => {
     expect(pkg.name).toBe("@render/pi-render");
-    expect(pkg.version).toBe("0.1.0");
+    expect(pkg.version).toBe("0.2.0");
     expect(pkg.license).toBe("MIT");
     expect(readFileSync(join(repoRoot, "LICENSE"), "utf8")).toContain("MIT License");
     expect(pkg.description?.length ?? 0).toBeGreaterThan(20);

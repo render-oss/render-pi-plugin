@@ -2,9 +2,9 @@
 name: render-scaling
 description: >-
   Scales Render services—configures autoscaling targets, chooses instance
-  types, sets manual instance counts, and optimizes cost. Use when the user
-  needs to handle more traffic, set up autoscaling, pick the right instance
-  type, reduce costs, or troubleshoot scaling behavior like slow scale-down or
+  compute plans, sets manual instance counts, and optimizes cost. Use when the
+  user needs to handle more traffic, set up autoscaling, pick the right compute
+  plan, reduce costs, or troubleshoot scaling behavior like slow scale-down or
   stuck instances.
 license: MIT
 compatibility: Render web services, private services, and background workers
@@ -16,7 +16,9 @@ metadata:
 
 # Render Scaling
 
-This skill covers how to scale **Web Services**, **Private Services**, and **Background Workers** on Render: manual instance counts, **Professional+** autoscaling, plan (instance type) choices, and platform limits. Deeper tables and tuning guidance live under `references/`.
+This skill covers how to scale **Web Services**, **Private Services**, and **Background Workers** on Render: manual instance counts, autoscaling with a **Pro workspace or higher**, compute plan choices, and platform limits. Deeper guidance lives under `references/`.
+
+When a service has or might need an attached disk, read `references/persistent-disks.md` before choosing a scaling architecture.
 
 ## When to Use
 
@@ -24,18 +26,20 @@ This skill covers how to scale **Web Services**, **Private Services**, and **Bac
 - Configuring **autoscaling** (min/max, CPU and memory targets)
 - Choosing **vertical** (plan) vs **horizontal** (more instances) scaling
 - Understanding **constraints** (disks, static sites, cron/workflows, 100-instance cap)
-- **Cost** implications of multi-instance and per-second billing
+- **Cost** implications of running more or larger instances
 - **Blueprint** fields: `numInstances`, `scaling`, `plan`
 
 ## Manual Scaling
 
 - Set **instance count** from **1 to 100** via the **Dashboard**, **CLI**, or **API**.
-- **All instances share the same instance type** (plan); you cannot mix plans on one service.
+- **All instances share the same compute plan**; you cannot mix plans on one service.
 - Changes apply **immediately**: Render **provisions** new instances and **deprovisions** excess capacity as needed.
 
 ## Autoscaling
 
-- Available on **Professional and higher** workspaces only.
+Before recommending an autoscaling policy, establish the service type, workspace plan, whether the service is stateless or has a disk, the desired minimum and maximum instance counts, and whether CPU or memory is the limiting resource.
+
+- Available only with a **Pro workspace or higher**.
 - Configure **minimum** and **maximum** instances and targets for **CPU** and/or **memory** utilization (**1–90%** each).
 - **At least one metric must be enabled** (CPU or memory). If **both** CPU and memory autoscaling toggles are **off**, autoscaling is **disabled**.
 - If **both** manual instance settings and autoscaling are configured, **autoscaling wins**—manual count does not override the scaling policy in effect.
@@ -53,7 +57,7 @@ Render computes a candidate instance count from utilization vs target:
 | Constraint | Behavior |
 |------------|----------|
 | **Per service** | **Maximum 100** instances |
-| **Persistent disk** | **Cannot** scale to multiple instances—**single instance only** |
+| **Persistent disk** | **Cannot** scale to multiple instances—disk-attached services stay **single-instance** |
 | **Static sites** | **Not** scalable (served by CDN) |
 | **Cron jobs & Workflows** | Scaling model **does not apply** (different execution model) |
 
@@ -62,24 +66,18 @@ Render computes a candidate instance count from utilization vs target:
 - **Scale-up** is **immediate** when utilization supports it.
 - **Scale-down** waits **a few minutes** after conditions allow reduction (**spike protection**). This reduces **flapping** from brief load spikes.
 
-## Instance Types
+## Compute Plans
 
-- In Blueprints, the instance type is the **`plan`** field (e.g. `standard`, `pro`).
-- Options span **free** / **starter** through **standard**, **pro**, **pro_plus**, **pro_max**, **pro_ultra**—each with defined **CPU** and **RAM** (see `references/instance-types.md`).
-
-### Vertical vs Horizontal
-
-| Need | Approach | When |
-|------|----------|------|
-| More throughput | **Horizontal** (add instances) | Stateless services, request-based workloads |
-| More RAM/CPU per process | **Vertical** (upgrade **plan**) | Memory-intensive or single-threaded apps |
-| Both | **Combine** | Right-size plan, then scale out for traffic |
+- In Blueprints, the compute plan is set with the **`plan`** field.
+- See `references/compute-plans.md` for current terminology, canonical plan discovery, and guidance on scaling up versus out.
 
 ## Cost Patterns
 
-- **Per-second billing**; **no separate fee** for scaling actions.
-- You pay roughly for **compute time × number of running instances** (see [Render pricing](https://render.com/pricing) for current rates).
+- Scaling changes the amount of billable compute by changing the number and size of running instances.
+- Confirm current compute charges at [Render pricing](https://render.com/pricing).
 - **Right-size** by monitoring **CPU and memory** utilization (see **render-monitor**).
+
+Sustained low CPU and memory across every instance indicates likely over-provisioning. Consult `references/compute-plans.md`, then test a smaller current compute plan, fewer manually scaled instances, or autoscaling that can scale down toward an appropriate utilization target (approximately 70% CPU is a common starting point for CPU-bound services). Change one dimension at a time when practical, and verify CPU, memory, latency, and errors under representative production traffic before keeping the change.
 
 ## Blueprint Configuration
 
@@ -99,10 +97,10 @@ scaling:
   targetMemoryPercent: 80
 ```
 
-**Instance type (plan):**
+**Compute plan:**
 
 ```yaml
-plan: standard
+plan: 1c-2g
 ```
 
 Do not rely on `numInstances` to cap autoscaling when a `scaling` block is present—**autoscaling takes precedence**. Preview behavior for scaling is detailed in `references/autoscaling-guide.md`.
@@ -111,7 +109,8 @@ Do not rely on `numInstances` to cap autoscaling when a `scaling` block is prese
 
 | Topic | File |
 |--------|------|
-| Plan names, CPU/RAM, flexible vs non-flexible, free tier | `references/instance-types.md` |
+| Compute plans and vertical vs horizontal scaling | `references/compute-plans.md` |
+| Persistent disk constraints and storage alternatives | `references/persistent-disks.md` |
 | Enabling autoscaling, targets, min/max, mistakes, previews | `references/autoscaling-guide.md` |
 
 ## Related Skills
@@ -120,3 +119,16 @@ Do not rely on `numInstances` to cap autoscaling when a `scaling` block is prese
 - **render-background-workers** — Worker-specific configuration and scaling context
 - **render-blueprints** — Full Blueprint schema and field reference
 - **render-monitor** — Metrics, logs, and utilization for right-sizing
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

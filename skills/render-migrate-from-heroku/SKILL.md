@@ -11,21 +11,31 @@ metadata:
 
 # Heroku to Render Migration
 
-Migrate from Heroku to Render by reading local project files first, then optionally enriching with live Heroku data via MCP.
+Migrate from Heroku to Render using the user's supplied inventory or local project files, then optionally enrich missing details with live Heroku data via MCP.
 
 ## Prerequisites Check
 
 Before starting, verify what's available:
 
-1. **Local project files** (required) — confirm the current directory contains a Heroku app (look for `Procfile`, `app.json`, `package.json`, `requirements.txt`, `Gemfile`, `go.mod`, or similar)
+1. **App inventory** (required) — use complete details supplied by the user, or inspect local project files such as `Procfile`, `app.json`, `package.json`, `requirements.txt`, `Gemfile`, or `go.mod`
 2. **Render MCP** (recommended) — check if `list_services` tool is available. Required for MCP Direct Creation (Step 3B) and automated verification (Step 6). Not required for the Blueprint path — the Render CLI and Dashboard handle generation, validation, and deployment.
 3. **Heroku MCP** (optional) — check if `list_apps` tool is available
 
-If Render MCP is missing and the user needs it, guide them through setup using the [MCP setup guide](references/mcp-setup.md). If Heroku MCP is missing, note that config var values and add-on plan details will need to be provided manually.
+Do not require local files or MCP when the user has already supplied enough information for the requested plan, Blueprint, or migration instructions. If Render MCP is missing and the user actually needs live Render access, use the Render access workflow in [references/render-access.md](references/render-access.md); the [MCP setup guide](references/mcp-setup.md) adds Heroku-specific setup. If Heroku MCP is missing, use supplied values or ask only for missing config-var names and add-on details.
 
 ## Migration Workflow
 
-Execute steps in order. Present findings to the user and get confirmation before creating any resources.
+For an end-to-end migration, execute the applicable steps in order. Present findings to the user and get confirmation before creating any resources.
+
+Before mapping Heroku process types to Render service types, read [references/service-types.md](references/service-types.md).
+
+### Choose the narrow workflow
+
+- **Complete inventory + Blueprint request:** read `references/service-mapping.md`, `references/blueprint-example.md`, and `references/blueprints.md`; generate the complete Blueprint directly. Do not call live tools merely to rediscover values the user supplied.
+- **Single-service migration:** gather the missing inventory, present the plan, and use MCP Direct Creation only after the user asks to create the service and confirms the plan.
+- **Data-migration question:** read `references/service-mapping.md` and `references/data-migration.md`; provide the applicable procedure without performing live operations unless requested.
+
+Use the exact Heroku plan row in `references/service-mapping.md`, including its mapped Render plan and disk allocation. These migration mappings intentionally use legacy Render plan names where appropriate; do not substitute a remembered current Plan ID.
 
 ### Step 1: Inventory Heroku App
 
@@ -91,7 +101,7 @@ Processes:
   release: [command] → Append to build command
 Add-ons:
   Heroku Postgres ([plan-slug], [disk-size]) → Render Postgres ([mapped-plan], diskSizeGB: [size])
-  Heroku Redis ([plan-slug]) → Render Key Value ([mapped-plan])
+  Heroku Key-Value Store ([plan-slug]) → Render Key Value ([mapped-plan])
 Config vars: 14 total (list names, not values)
 ```
 
@@ -105,7 +115,7 @@ Before creating anything, run through the [pre-flight checklist](references/pref
 - Git remote exists and is HTTPS format
 - Database size (large DBs need assisted migration)
 
-Look up each Heroku dyno size and add-on plan in the [service mapping](references/service-mapping.md) to determine correct Render plans and cost estimates. Present the migration plan table from the [pre-flight checklist](references/preflight-checklist.md) and wait for user confirmation before creating any resources.
+Look up each Heroku dyno size and add-on plan in the [service mapping](references/service-mapping.md) to determine the correct Render plans. Present the migration plan table from the [pre-flight checklist](references/preflight-checklist.md), flag resources that incur charges, direct the user to [Render pricing](https://render.com/pricing) for current details, and wait for confirmation before creating anything.
 
 ### Determine Creation Method
 
@@ -128,11 +138,11 @@ If unsure, use Blueprint. Most Heroku apps have at least a database, so Blueprin
 
 ### Step 3A: Generate Blueprint (Multi-Service)
 
-This step has three mandatory sub-steps. Complete all three in order.
+This path has three stages. Always complete authoring; perform local validation and provide the apply flow when those actions are in scope.
 
 #### 3A-i. Write render.yaml
 
-Generate a `render.yaml` file and write it to the repo root. See the [Blueprint example](references/blueprint-example.md) for a complete example, the [Blueprint docs](https://render.com/docs/blueprint-spec#projects-and-environments) for usage guidance, and the [Blueprint YAML JSON schema](https://render.com/schema/render.yaml.json) for the full field reference.
+Generate a complete `render.yaml`. Write it to the repository root when operating in the user's repository; otherwise present the complete file in the response. Before authoring it, read the current specification-fetch, validation, repository-sync, and safety workflow in [references/blueprints.md](references/blueprints.md). Then use the [Blueprint example](references/blueprint-example.md) for the migration-specific structure.
 
 **IMPORTANT: Always use the `projects`/`environments` pattern.** The YAML must start with a `projects:` key — never use flat top-level `services:` or `databases:` keys. This groups all migrated resources into a single Render project.
 
@@ -148,13 +158,13 @@ Generate the YAML following the full template, rules, and patterns in the [Bluep
 
 #### 3A-ii. Validate the Blueprint
 
-This step is mandatory. First, check if the Render CLI is installed:
+When a `render.yaml` file has been written locally, validate it before presenting it as ready to deploy. First, check if the Render CLI is installed:
 
 ```bash
 render --version
 ```
 
-If not installed, offer to install it:
+If not installed, offer to install it when deployment-ready local validation is in scope:
 
 - macOS: `brew install render`
 - Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/render-oss/cli/main/bin/install.sh | sh`
@@ -165,11 +175,11 @@ Once the CLI is available, run the validation command and show the output to the
 render blueprints validate render.yaml
 ```
 
-If validation fails, fix the errors in the YAML and re-validate. Repeat until validation passes. **Do not proceed to the next step until the Blueprint validates successfully.**
+If validation fails, fix the errors in the YAML and re-validate. Repeat until validation passes. When the user requested only an example or no local file exists, provide the validation command without attempting installation or claiming that validation ran.
 
 #### 3A-iii. Provide the deploy URL
 
-After validation passes:
+When the user wants to apply the Blueprint, after validation passes:
 
 1. Instruct user to commit and push: `git add render.yaml && git commit -m "Add Render migration Blueprint" && git push`
 2. Get the repo URL by running `git remote get-url origin`. If the URL is SSH format (e.g., `git@github.com:user/repo.git`), convert it to HTTPS (`https://github.com/user/repo`). Then construct the deeplink: `https://dashboard.render.com/blueprint/new?repo=<HTTPS_REPO_URL>`
@@ -179,13 +189,7 @@ After validation passes:
 
 ### Step 3B: MCP Direct Creation (Single-Service)
 
-Before creating resources via MCP, verify the active workspace:
-
-```
-get_selected_workspace()
-```
-
-If the workspace is wrong, list available workspaces with `list_workspaces()` and ask the user to select the correct one. Resources will be created in whichever workspace is active.
+Before creating resources via MCP, follow [references/render-access.md](references/render-access.md) and verify that the active workspace is the one the user intends.
 
 For single-service migrations without databases, create via MCP tools:
 
@@ -201,6 +205,8 @@ For single-service migrations without databases, create via MCP tools:
 Present the creation result (service URL, ID) when complete.
 
 ### Step 4: Migrate Environment Variables
+
+Before inspecting or applying configuration, read [references/environment-variables.md](references/environment-variables.md) and preserve the migration-specific filtering and confirmation steps below.
 
 #### Gather config vars
 
@@ -224,16 +230,16 @@ Present filtered list to user — **do not write without confirmation**.
 
 **Blueprint path (Step 3A):** Env vars are already embedded in the `render.yaml` on each service (non-secret values inline, secrets marked `sync: false` for the user to fill in during Blueprint apply). No separate MCP call is needed — skip to Step 5.
 
-**MCP path (Step 3B):** Call Render `update_environment_variables` with confirmed vars (supports bulk set, merges by default).
+**MCP path (Step 3B):** Inspect the current `update_environment_variables` operation, confirm whether it patches or replaces the collection, and apply only the confirmed variables while preserving unrelated keys.
 
 ### Step 5: Data Migration
 
-Follow the [data migration guide](references/data-migration.md) to migrate Postgres and Redis data. The guide covers sub-steps 5a through 5e in detail. Summary of the flow:
+Follow the [data migration guide](references/data-migration.md) to migrate Postgres and Key Value data. The guide covers sub-steps 5a through 5e in detail. Summary of the flow:
 
 1. **Pre-migration checks** — confirm Render resources are provisioned via `list_postgres_instances()` and `list_key_value()`, check source DB size, verify Render CLI (`render --version`), `pg_dump`, and `pg_restore` are installed
 2. **Gather connection strings** — Heroku Postgres via `pg_credentials` (MCP) or user CLI paste. For Key Value, construct a Dashboard deeplink from the ID.
 3. **Postgres migration** — two approaches based on size: **under 2 GB** uses `render psql` (no Render connection string needed); **2-50 GB** uses `pg_dump -Fc` + `pg_restore` with external connection string from Dashboard (faster, compressed, parallel restore).
-4. **Key Value / Redis** — usually skip (ephemeral cache). If persistent data, use `redis-cli` dump/restore with Dashboard-provided Render URL.
+4. **Key Value** — usually skip (ephemeral cache). If persistent data, use `redis-cli` dump/restore with Dashboard-provided Render URL.
 5. **Data validation** — verify schema and row counts via `query_render_postgres`, compare against Heroku source if MCP is available.
 
 ### Step 6: Verify Migration
@@ -298,7 +304,7 @@ Instruct user to:
 If the migration fails at any point:
 
 - **Services created but not working**: Services can be deleted from the Render dashboard (MCP server intentionally does not support deletion). Heroku app is untouched until maintenance mode is enabled.
-- **Env vars wrong**: Call `update_environment_variables` with `replace: true` to overwrite, or fix individual vars.
+- **Env vars wrong**: Follow [references/environment-variables.md](references/environment-variables.md), inspect the current update operation's patch-or-replace behavior, and correct only the intended keys.
 - **Database migration failed**: Render Postgres can be deleted and recreated. Heroku database is read-only during dump (no data loss). If `maintenance_off` is called on Heroku, the original app is fully operational again.
 - **DNS already changed**: Revert CNAME to Heroku and disable maintenance mode on Heroku.
 
@@ -310,3 +316,16 @@ Key principle: **Heroku stays fully functional until the user explicitly cuts ov
 - Env var migration partially fails: show which succeeded/failed
 - Heroku auth errors: instruct `heroku login` or check `HEROKU_API_KEY`
 - Render auth errors: check Render API key in MCP config
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

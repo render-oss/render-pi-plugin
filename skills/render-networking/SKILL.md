@@ -25,66 +25,21 @@ Render’s **private network** lets services talk to each other without exposing
 - **Service discovery** across multiple instances (custom load balancing, mesh-style setups)
 - **Port limits**, reserved ports, or **multi-port** web services (public vs private)
 - **Free-tier** web services and **who can send vs receive** private traffic
-- **Environment isolation** (Professional+) or **AWS PrivateLink** for private egress/ingress patterns
+- **Environment isolation** (with a Pro workspace or higher) or **AWS PrivateLink** for private egress/ingress patterns
 
-For step-by-step architecture examples and Blueprint patterns, see `references/communication-patterns.md`. For failure modes and fixes, see `references/troubleshooting.md`.
+Before designing, configuring, or troubleshooting private connectivity, read `references/private-networking.md`. For architecture examples and Blueprint patterns, see `references/communication-patterns.md`.
 
-## Private Network Basics
+## Private Connection Essentials
 
-Private connectivity is available only when **all** of the following hold:
-
-- Services are in the **same region**
-- Services are in the **same workspace**
-
-If either differs, private DNS and internal routing will not connect those services.
-
-### Who can communicate
-
-| Resource | Private inbound | Private outbound | Internal hostname |
-|----------|-----------------|------------------|-------------------|
-| **Web Service** | Yes (paid tiers; see Free tier below) | Yes | Yes |
-| **Private Service** | Yes | Yes | Yes |
-| **Background Worker** | No | Yes | No |
-| **Cron Job** | No | Yes | No |
-| **Workflow Run** | No | Yes | No |
-| **Static Site** | — | — | **Not on private network** |
-| **Managed Postgres** | Via internal URL (from allowed clients) | N/A (datastore) | Via internal URL |
-| **Key Value** | Via internal URL (from allowed clients) | N/A (datastore) | Via internal URL |
-
-**Free-tier Web Services:** They may **send** private traffic to other services, but they **cannot receive** inbound private traffic. Plan upgrades or topology changes apply if a free web service must accept private connections.
-
-Workers, crons, and workflow runs initiate outbound connections (e.g., to internal URLs or private service hostnames) but are **not** reachable by internal hostname for inbound calls.
-
-## Internal Addresses
-
-- Open the service in the Render Dashboard → **Connect** → **Internal** tab for the canonical internal hostname, URL, and connection details.
-- Clients often need an **explicit scheme** in code or config, e.g. `http://service-name:port` or `https://...` when TLS applies—do not assume a bare hostname alone is enough for every HTTP client.
-- **URL shape:** `http://[internal-hostname]:[port]/path` (adjust scheme/port per service).
+- If the service types or traffic direction are unclear, establish which service initiates the connection and which service receives it before proposing an address.
+- Private-network peers must be in the same workspace and region. Use the destination's address from **Connect > Internal** in the Dashboard.
+- Construct a complete URL when the client expects one, such as `http://[internal-hostname]:[port]/path`; a bare hostname does not supply the protocol.
+- Web services and private services can receive private traffic. Background workers, cron jobs, and workflow runs can initiate outbound private connections but have no internal hostname and cannot receive them.
+- In a gateway pattern, a public web service calls a private service over the private network; the private service does not need a public endpoint.
 
 ## Service Discovery
 
-For services with **multiple instances**, Render exposes a **discovery DNS** name that resolves to **all instance IPs** for that service. The pattern is **`[hostname]-discovery`** (see Dashboard docs for the exact hostname shown for your service).
-
-- **`RENDER_DISCOVERY_SERVICE`** is set in environments where discovery applies; use it with the discovery hostname pattern for scripts and app code that need instance lists.
-- **Use case:** Custom load balancing, health aggregation, or any logic that must fan out or pick among instances explicitly instead of a single internal hostname.
-
-See `references/communication-patterns.md` for discovery-oriented patterns.
-
-## Port Rules
-
-- **Maximum 75 open ports** per service.
-- **Reserved ports** (do not bind your app to these for normal use): **10000** (public HTTP proxy path), **18012**, **18013**, **19099**.
-- **Multi-port Web Services:** Only **one** port receives **public** HTTP traffic; that port must align with the **`PORT`** environment variable. **Additional** ports are for **private network** access only.
-
-When something fails to connect, verify the target is listening on the expected port and that the port is not reserved or blocked by misconfiguration.
-
-## Environment Isolation
-
-On **Professional and higher** workspaces, you can configure **per-environment** rules so private traffic does **not** cross certain environment boundaries. If private calls work in one environment but not another, check workspace **environment isolation** settings before assuming DNS or app bugs.
-
-## AWS PrivateLink
-
-**Professional+** workspaces can use **AWS PrivateLink** to extend private connectivity to or from external AWS VPCs and approved endpoints. This is separate from default service-to-service private DNS; use it when the architecture requires **private** access to Render or from Render to specific AWS resources without the public internet.
+Use a service's normal internal hostname for ordinary service-to-service traffic. When an application specifically needs every active instance—for custom load balancing, per-instance metrics, or similar logic—use the service's discovery hostname, conventionally `[internal-hostname]-discovery`, which resolves to all active instance IPs. Each web or private service receives its own discovery hostname in `RENDER_DISCOVERY_SERVICE`. Do not persist the resolved IPs because they can change between deploys.
 
 ## Common Patterns
 
@@ -98,11 +53,24 @@ Short summaries; full diagrams and Blueprint notes live in `references/communica
 
 | Document | Purpose |
 |----------|---------|
-| `references/communication-patterns.md` | Gateway, worker→DB, mesh, URL construction, Blueprint `fromService`, discovery load balancing, private health checks |
-| `references/troubleshooting.md` | DNS, ports, region/workspace, free tier, protocol, resolver, environment isolation |
+| `references/private-networking.md` | Current private-network capabilities, addressing, discovery, ports, isolation, and troubleshooting |
+| `references/communication-patterns.md` | Gateway, worker→DB, mesh, URL construction, and Blueprint `fromService` patterns |
 
 ## Related Skills
 
 - **render-web-services** — Public web services, `PORT`, and HTTP behavior
-- **render-private-services** (planned) — Private Service–specific setup and scaling
+- **render-private-services** — Private Service–specific setup and scaling
 - **render-blueprints** — `render.yaml`, `fromService`, and multi-service wiring
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

@@ -13,10 +13,12 @@ This only applies to external connections. Internal connections from Render serv
 
 ## Connection refused (internal URL)
 
-**Cause:** Service and Key Value instance are in different regions, or the Key Value instance is not yet available.
+Read [private-networking.md](private-networking.md) for the complete private-connectivity checklist.
+
+**Cause:** The resources do not share the required private-network scope, project-environment isolation blocks the connection, or the Key Value instance is not yet available.
 
 **Fix:**
-- Verify both resources are in the **same region** (e.g. both in `oregon`)
+- Verify both resources are in the **same workspace and region** and are not separated by environment isolation
 - Check the instance status in Dashboard — it should show "Available"
 - Ensure you're using the **internal** URL (starts with `redis://`), not the external URL
 
@@ -37,7 +39,7 @@ Get the authenticated URL from Dashboard > Connect menu.
 **Cause:** Instance memory is full and `maxmemoryPolicy` is `noeviction`.
 
 **Fix options:**
-- **Upgrade** to a larger instance type (Dashboard > Key Value Instance > Update)
+- **Upgrade** to a larger compute plan (Dashboard > Key Value Instance > Update)
 - **Add TTLs** to keys that don't need to persist forever
 - **Switch policy** to `allkeys-lru` if data loss is acceptable (cache use case)
 - **Review data patterns** — are you storing more than intended?
@@ -60,6 +62,6 @@ Instances created before February 2025 run Redis 6. They continue to operate but
 
 No action is required unless you need Valkey 8-specific features. Migration to a new instance requires creating a new Key Value and updating connection strings.
 
-## Cannot downgrade instance type
+## Cannot downgrade a compute plan
 
-Instance type changes are **upgrade-only**. You cannot move to a smaller instance. If you need less capacity, create a new smaller instance and migrate your data.
+Compute-plan changes are **upgrade-only**. You cannot move to a smaller plan. If you need less capacity, create a new smaller instance and migrate your data.

@@ -20,6 +20,8 @@ metadata:
 
 The Render CLI manages services, databases, and deployments from the terminal. Supports interactive use, non-interactive scripting, and CI/CD automation.
 
+Before installing, authenticating, selecting a workspace, or running commands, read `references/render-access.md` for the current access and command-discovery workflow.
+
 ## When to Use
 
 - **Deploying** a service from the terminal or CI/CD
@@ -30,74 +32,9 @@ The Render CLI manages services, databases, and deployments from the terminal. S
 - **Scripting** Render operations in CI/CD pipelines
 - **Installing** agent skills for AI coding tools
 
-## Installation
-
-| Method | Command |
-|--------|---------|
-| **Homebrew** | `brew update && brew install render` |
-| **Linux/macOS** | `curl -fsSL https://raw.githubusercontent.com/render-oss/cli/refs/heads/main/bin/install.sh \| sh` |
-| **Direct download** | [GitHub releases](https://github.com/render-oss/cli/releases/) |
-| **Build from source** | `git clone git@github.com:render-oss/cli.git && cd cli && go build -o render` |
-
-After install, run `render` with no arguments to confirm.
-
-## Authentication
-
-### Interactive (local dev)
-
-```bash
-render login
-```
-
-Opens the browser to generate a CLI token. Token is saved to `~/.render/cli.yaml`. Tokens expire periodically—re-run `render login` when prompted.
-
-### Non-interactive (CI/CD)
-
-```bash
-export RENDER_API_KEY=rnd_...
-```
-
-API keys do not expire. Generate one from **Account Settings > API Keys** in the Dashboard. The API key takes precedence over CLI tokens when set.
-
-Set the active workspace:
-
-```bash
-render workspace set
-```
-
 ## Command Reference
 
-### Core commands
-
-| Command | Purpose | Key flags |
-|---------|---------|-----------|
-| `render login` | Authenticate via browser | — |
-| `render workspace set` | Set active workspace | — |
-| `render services` | List all services and datastores | `-o json` for scripting |
-| `render deploys create [SVC]` | Trigger a deploy | `--wait`, `--commit SHA`, `--image URL` |
-| `render deploys list [SVC]` | List deploys for a service | `-o json` |
-| `render logs -r [SVC]` | View logs | `--tail` for streaming |
-| `render psql [DB]` | Open psql session | `-c "SQL"`, `-o json`, `-- --csv` |
-| `render ssh [SVC]` | SSH into running instance | `--ephemeral` / `-e` for isolated shell |
-| `render blueprints validate` | Validate `render.yaml` | Defaults to `./render.yaml` |
-| `render skills [install\|update\|list]` | Manage agent skills | — |
-| `render workspaces` | List workspaces | `-o json` |
-
-### Non-interactive mode
-
-For CI/CD and scripts, always set:
-
-| Flag | Purpose |
-|------|---------|
-| `-o json` (or `yaml`, `text`) | Machine-readable output |
-| `--confirm` | Skip confirmation prompts |
-
-Output format precedence: `--output` flag > `RENDER_OUTPUT` env var > auto-detect (TTY → interactive, pipe → text).
-
-```bash
-export RENDER_OUTPUT=json
-render services --confirm
-```
+Use the installed CLI help or generated command reference as directed by `references/render-access.md` for the exact command surface and flags. The patterns below cover common operational workflows.
 
 ### Deploy patterns
 
@@ -135,38 +72,37 @@ jobs:
     steps:
       - name: Install Render CLI
         run: |
-          curl -L https://github.com/render-oss/cli/releases/download/v1.1.0/cli_1.1.0_linux_amd64.zip -o render.zip
-          unzip render.zip
-          sudo mv cli_v1.1.0 /usr/local/bin/render
+          curl --fail-with-body --silent --show-error --location \
+            https://raw.githubusercontent.com/render-oss/cli/refs/heads/main/bin/install.sh \
+            --output /tmp/install-render-cli.sh
+          sudo sh /tmp/install-render-cli.sh
+          render --version
       - name: Deploy
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: render deploys create ${{ secrets.RENDER_SERVICE_ID }} --wait --confirm -o json
 ```
 
-Pin to a specific CLI version in CI to avoid breaking changes.
+If reproducible builds require a pinned CLI, select a currently supported release and verify its asset name in the current release documentation instead of copying a version from this skill.
 
 ## Local Config
 
 Config file: `~/.render/cli.yaml`
 
-Override with `RENDER_CLI_CONFIG_PATH` env var.
+Override the configuration directory with `RENDER_CLI_CONFIG_DIR`. `RENDER_CLI_CONFIG_PATH` is a legacy file-level override retained for compatibility and is scheduled for deprecation.
 
 ## Common Mistakes
 
 | Mistake | Fix |
 |---------|-----|
-| Token expired | Re-run `render login` |
-| Wrong workspace | Run `render workspace set` to switch |
-| Missing `--confirm` in CI | Add `--confirm` to skip interactive prompts |
-| Using `--output interactive` in CI | Use `-o json` or `-o text` in non-TTY environments |
 | Deploying without `--wait` in CI | Add `--wait` so the job fails on deploy failure |
 
 ## References
 
 | Document | Contents |
 |----------|----------|
-| `references/command-cheatsheet.md` | Full command list with flags, output examples, and scripting patterns |
+| `references/render-access.md` | Current CLI authentication, workspace, documentation, output, and authorization workflow |
+| `references/command-cheatsheet.md` | Common operational command examples and scripting patterns |
 
 ## Related Skills
 
@@ -174,3 +110,16 @@ Override with `RENDER_CLI_CONFIG_PATH` env var.
 - **render-blueprints** — `render.yaml` authoring and validation
 - **render-postgres** — Database connections, `render psql` usage
 - **render-debug** — Using `render logs` and `render ssh` for troubleshooting
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->

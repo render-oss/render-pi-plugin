@@ -1,6 +1,6 @@
 # Private registry setup for Render
 
-Render pulls private images when you attach **Registry Credentials** from the Dashboard and reference them in Blueprint YAML via **`registryCredential.fromRegistryCreds`**.
+Render pulls private images when you attach **Registry Credentials** from the Dashboard. In Blueprint YAML, prebuilt images use **`image.creds.fromRegistryCreds`**, while Dockerfile builds with private base images use **`registryCredential.fromRegistryCreds`**.
 
 ## Dashboard: Registry Credentials
 
@@ -17,12 +17,18 @@ services:
     runtime: image
     image:
       url: docker.io/myorg/api:v1.2.3
-    registryCredential:
-      fromRegistryCreds:
-        name: my-dockerhub-cred
+      creds:
+        fromRegistryCreds:
+          name: my-dockerhub-cred
 ```
 
-Use the same `registryCredential` block for **`runtime: docker`** when the **base image** in your Dockerfile is private.
+For **`runtime: docker`** with a private base image, put the credential at the service level instead:
+
+```yaml
+registryCredential:
+  fromRegistryCreds:
+    name: my-dockerhub-cred
+```
 
 ---
 
@@ -61,7 +67,7 @@ Use the same `registryCredential` block for **`runtime: docker`** when the **bas
 ## Blueprint: `runtime: image`
 
 - Set **`runtime: image`** and **`image.url`** to the full reference (tag or digest).
-- Add **`registryCredential`** when the registry is private.
+- Add **`image.creds.fromRegistryCreds.name`** when the registry is private.
 
 Immutable deploys:
 
@@ -74,9 +80,4 @@ image:
 
 ## Auto-deploy and prebuilt images
 
-Services that **only pull** a prebuilt image (**`runtime: image`**) **do not** auto-deploy when a mutable tag like **`latest`** is updated upstream. After publishing a new image you must:
-
-- Trigger a **manual redeploy** in the Dashboard, or
-- Call a **deploy hook** / API flow your team uses for CD.
-
-Combine **immutable tags or digests** with your release pipeline so each deploy points at an explicit artifact.
+Follow [deployments.md](deployments.md) for current trigger and mutable-tag behavior. Combine **immutable tags or digests** with your release pipeline so each deploy points at an explicit artifact.

@@ -31,6 +31,8 @@ Deploys static frontends (React, Vue, Hugo, Gatsby, Docusaurus, Jekyll, etc.) to
 
 For SSR frameworks (Next.js, Nuxt, SvelteKit) that need a running server, use **render-web-services** instead. For Blueprint authoring, see **render-blueprints**.
 
+When choosing between a static site and a web service, read `references/service-types.md`.
+
 ## Static Site vs Web Service
 
 | Need | Use | Why |
@@ -133,7 +135,7 @@ services:
 - **Brotli compression** (better than gzip)
 - **HTTP/2** by default
 - **Immediate cache invalidation** on every deploy (zero-downtime, atomic deploys)
-- **DDoS protection** included free
+- **DDoS protection** included
 
 ## Billing
 
@@ -142,12 +144,15 @@ Static sites have a **free tier**. They count against workspace-level monthly in
 - **Outbound bandwidth** (data served to users)
 - **Pipeline minutes** (build time)
 
+Usage beyond included allowances can incur additional cost. Confirm current allowances and charges at [Render pricing](https://render.com/pricing).
+
 ## References
 
 | Document | Contents |
 |----------|----------|
 | `references/routing-and-headers.md` | Redirect types, rewrite rules, header patterns, SPA config |
 | `references/framework-configs.md` | Build commands and publish paths for 10+ frameworks |
+| `references/service-types.md` | Service-type selection and execution models |
 
 ## Related Skills
 
@@ -155,3 +160,16 @@ Static sites have a **free tier**. They count against workspace-level monthly in
 - **render-blueprints** — Full `render.yaml` schema for static site fields
 - **render-domains** — Custom domain and TLS setup
 - **render-deploy** — Deploy flows, CLI, MCP operations
+
+<!-- shared:documentation-retrieval -->
+## Current documentation retrieval
+
+Whenever this skill directs you to consult current Render documentation:
+
+1. Retrieve the linked Markdown document directly with an available URL-fetching tool or HTTP client, such as `curl`. Do not substitute web-search summaries for the document.
+2. Confirm that retrieval succeeded and returned the expected document, then read its contents. Saving a file or printing its path is not sufficient.
+3. If the request fails or your tool cannot read the Markdown response, open and read the linked HTML version instead.
+4. If neither version can be retrieved, disclose that the current reference is unavailable and follow any topic-specific fallback in the skill. Use bundled guidance only for stable constraints, and do not guess at changeable platform details.
+
+When a task requires multiple references, apply this workflow to each one and distinguish the documents you verified from those that remain unavailable.
+<!-- /shared:documentation-retrieval -->
